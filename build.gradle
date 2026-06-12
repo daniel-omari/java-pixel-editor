@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.danielomari.pixeleditor'
+version = '1.0.7-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'com.formdev', name: 'flatlaf', version: '3.4.1'
+}
+
+java {
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs += "--enable-preview"
+}
+
+tasks.withType(JavaExec).configureEach {
+    jvmArgs += "--enable-preview"
+}
+
+application {
+    mainClass = 'com.danielomari.pixeleditor.PixelGraphicEditor'
+}
+
+jar {
+    archiveBaseName = 'pixelbasededitor'
+    archiveVersion = "$project.version"
+}

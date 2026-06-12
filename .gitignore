@@ -1,0 +1,19 @@
+# VScode Ignored files:
+/.vscode/
+# Eclipse Ignored files:
+/.project
+/.classpath
+/.settings/
+# Intellij Ignored files:
+/.idea/
+/.idea/*
+.idea/vcs.xml
+/*.iml
+.idea
+# Gradle Ignored files:
+/build/
+/out/
+.gradle/
+# OS Ignored files:
+.DS_Store
+Thumbs.db
