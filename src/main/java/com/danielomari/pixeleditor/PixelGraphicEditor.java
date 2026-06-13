@@ -53,7 +53,7 @@ public class PixelGraphicEditor {
                 canvas.setWindowDimensions(); // Listener for window resizing.
             }
         });
-        mainFrame.setResizable(false);
+        mainFrame.setResizable(true);
         mainFrame.setVisible(true);
         EventQueue.invokeLater(() -> {
             mainFrame.setAlwaysOnTop(false);

@@ -103,96 +103,85 @@ public class BrushTool implements Tool {
             case LARGE -> size = 15;
             default -> size = 5;
         }
-//        System.out.println("Selected Brush size: " + selectedBrushSize);
         g2d.setColor(setColor());
 
-        // Apply different styles based on brush type
-        switch (selectedBrushType) {
-            case option1 -> {//natural pencil
-                g2d.setStroke(new BasicStroke(size, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-                g2d.drawLine(x1, y1, x2, y2);
-            }
-            case option2 -> {//sprays
-                for (int i = 0; i < points.size(); i += 3) { // Adjust dot spacing
-                    Point p = points.get(i);
-                    for (int j = 0; j < 3; j++) { // Add small clusters of dots
-                        int offsetX = (int) (Math.random() * size - size / 2.0);
-                        int offsetY = (int) (Math.random() * size - size / 2.0);
-                        int dotSize = (int) (size * 0.5 + Math.random() * 2); // Slightly varied dot sizes
-                        g2d.fill(new Ellipse2D.Double(p.x + offsetX, p.y + offsetY, dotSize, dotSize));
-                    }
-                }
-            }
-
-            case option3 -> {//dotted lines
-                for (int i = 0; i < points.size(); i += 3) { // Skip some points for better spacing
-                    Point p = points.get(i);
-                    int dotSize = (int) (size * 0.3); // Adjust dot size
-                    g2d.fill(new Ellipse2D.Double(p.x - dotSize / 2.0, p.y - dotSize / 2.0, dotSize, dotSize));
-                }
-            }
-
-            case option4 -> {//oil brush
-                // Semi-transparent strokes for blending effect
-                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f)); // 30% opacity
-
-                //get base color
-                Color baseColor = ColorTool.getColor();
-
-                // Simulate oil brush texture with random bristle effect
-                for (int i = 0; i < 10; i++) { // More iterations for richer strokes
-                    int offsetX = (int) (Math.random() * size - size / 2.0);
-                    int offsetY = (int) (Math.random() * size - size / 2.0);
-
-                    // Generate a random opacity value between 100 and 250
-                    int alpha = (int) (Math.random() * 150 + 100);
-
-                    // Create a new color with the same RGB but different opacity
-                    Color newColor = new Color(baseColor.getRed(), baseColor.getGreen(), baseColor.getBlue(), alpha);
-
-                    g2d.setColor(newColor);
-                    g2d.fillOval(prevX + offsetX, prevY + offsetY, size, size); // Soft rounded strokes
-                }
-            }
-
-            case option5 ->{
-                final int pointStep = 8; 
-                final int starPoints = 5; // Fixed 5-pointed stars
-                final double starSize = size * 0.6;
-                final double positionJitter = 0.3;
-                
-                // Store original transform
-                AffineTransform originalTransform = g2d.getTransform();
-                
-                try {
-                    for(int i = 0; i < points.size(); i += pointStep) {
-                        Point p = points.get(i);
-
-                        // Add slight random position variation
-                        double offsetX = (Math.random() - 0.5) * size * positionJitter;
-                        double offsetY = (Math.random() - 0.5) * size * positionJitter;
-                        
-                        // Create transformation for this star
-                        AffineTransform at = new AffineTransform();
-                        at.translate(p.x + offsetX, p.y + offsetY); // Move to mouse position
-                        
-                        // Apply the transformation
-                        g2d.setTransform(at);
-                        
-                        // Create and draw star
-                        Shape star = createStar(starPoints, starSize, starSize * 0.4);
-                        g2d.fill(star);
-                    }
-                } finally {
-                    // Reset to original transform
-                    g2d.setTransform(originalTransform);
-                }
-            }
+        // Natural pencil is one connected stroke, so it already fills any gaps.
+        if (selectedBrushType == BrushType.option1) {
+            g2d.setStroke(new BasicStroke(size, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            g2d.drawLine(x1, y1, x2, y2);
+            g2d.dispose();
+            canvasPanel.repaint();
+            return;
         }
+
+        // Stamp-based brushes: walk along this segment at a fixed spacing and
+        // stamp at every step, so the stroke stays continuous no matter how fast
+        // the mouse moves (sparse drag events no longer leave gaps).
+        double dx = x2 - x1;
+        double dy = y2 - y1;
+        double distance = Math.hypot(dx, dy);
+        double spacing = switch (selectedBrushType) {
+            case option3 -> Math.max(2.0, size * 0.8); // dotted: even, visible gaps
+            case option5 -> Math.max(2.0, size * 0.9); // stars: spaced out
+            default -> Math.max(1.0, size * 0.25);      // spray / oil: dense fill
+        };
+        int steps = (int) Math.max(1, Math.round(distance / spacing));
+        for (int s = 0; s <= steps; s++) {
+            double t = (double) s / steps;
+            int px = (int) Math.round(x1 + dx * t);
+            int py = (int) Math.round(y1 + dy * t);
+            stamp(g2d, px, py);
+        }
+
         g2d.dispose();
         canvasPanel.repaint();
     }
-    
+
+    // Paints a single brush stamp at one point for the stamp-based styles.
+    // drawOnCanvas calls this repeatedly along the stroke.
+    private void stamp(Graphics2D g2d, int px, int py) {
+        switch (selectedBrushType) {
+            case option2 -> { // spray: a small cluster of random dots
+                for (int j = 0; j < 3; j++) {
+                    int offsetX = (int) (Math.random() * size - size / 2.0);
+                    int offsetY = (int) (Math.random() * size - size / 2.0);
+                    int dotSize = (int) (size * 0.5 + Math.random() * 2);
+                    g2d.fill(new Ellipse2D.Double(px + offsetX, py + offsetY, dotSize, dotSize));
+                }
+            }
+            case option3 -> { // dotted line: one small dot per step
+                int dotSize = (int) (size * 0.3);
+                g2d.fill(new Ellipse2D.Double(px - dotSize / 2.0, py - dotSize / 2.0, dotSize, dotSize));
+            }
+            case option4 -> { // oil: translucent bristle cluster
+                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+                Color baseColor = ColorTool.getColor();
+                for (int i = 0; i < 10; i++) {
+                    int offsetX = (int) (Math.random() * size - size / 2.0);
+                    int offsetY = (int) (Math.random() * size - size / 2.0);
+                    int alpha = (int) (Math.random() * 150 + 100);
+                    g2d.setColor(new Color(baseColor.getRed(), baseColor.getGreen(),
+                            baseColor.getBlue(), alpha));
+                    g2d.fillOval(px + offsetX, py + offsetY, size, size);
+                }
+            }
+            case option5 -> { // star
+                AffineTransform original = g2d.getTransform();
+                try {
+                    double offsetX = (Math.random() - 0.5) * size * 0.3;
+                    double offsetY = (Math.random() - 0.5) * size * 0.3;
+                    AffineTransform at = new AffineTransform();
+                    at.translate(px + offsetX, py + offsetY);
+                    g2d.setTransform(at);
+                    g2d.fill(createStar(5, size * 0.6, size * 0.6 * 0.4));
+                } finally {
+                    g2d.setTransform(original);
+                }
+            }
+            default -> { }
+        }
+    }
+
     // helper method to create star shapes
     private Shape createStar(int points, double outerRadius, double innerRadius) {
         GeneralPath path = new GeneralPath();

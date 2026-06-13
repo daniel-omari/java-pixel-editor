@@ -6,6 +6,9 @@ import com.danielomari.pixeleditor.ui.CanvasPanel;
 import java.awt.*;
 import java.awt.event.MouseEvent;
 
+// Zoom tool. Left-click zooms in by a fixed step, right-click zooms out, and
+// dragging left/right adjusts the zoom continuously. The level is clamped
+// between MIN_ZOOM and MAX_ZOOM and applied to the shared canvas.
 public class MagnifierTool implements Tool {
     private static final float ZOOM_INCREMENT = 0.1f;
     private static final float MAX_ZOOM = 3.0f;
@@ -31,6 +34,7 @@ public class MagnifierTool implements Tool {
     public void onRelease(MouseEvent e) {
     }
 
+    // Left-drag scales the zoom in proportion to the horizontal drag distance.
     @Override
     public void onDrag(MouseEvent e) {
         if (e.getButton() == MouseEvent.BUTTON1) {
