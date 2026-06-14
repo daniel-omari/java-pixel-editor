@@ -98,11 +98,11 @@ public class ShapeTool implements Tool {
     public void onPress(MouseEvent e) {
         if (isDrawing) {
 
-            startPoint = TransformMouseEvent.transformPoint(new Point(e.getX(), e.getY()));
-//            startPoint = new Point(e.getX(), e.getY());
-            endPoint = new Point(startPoint); // Initialize with start point
+            // Mouse events arrive from CanvasPanel's dispatch already mapped to
+            // image coordinates, so use them directly.
+            startPoint = new Point(e.getX(), e.getY());
+            endPoint = new Point(startPoint); // Initialise with the start point
             currentCommand = new Drawcommand(canvas);
-            System.out.println("ShapeTool: Press at " + startPoint.x + "," + startPoint.y);
         } else {
             selectTool.onPress(e);
         }
@@ -111,12 +111,8 @@ public class ShapeTool implements Tool {
     @Override
     public void onDrag(MouseEvent e) {
         if (isDrawing && startPoint != null) {
-            endPoint = TransformMouseEvent.transformPoint(new Point(e.getX(), e.getY()));
-//            if(endPoint.x > () || endPoint.y > canvas.getHeight()){
-//                return;
-//            }
-            System.out.println("ShapeTool: Drag to " + endPoint.x + "," + endPoint.y);
-            canvas.repaint(); // Force repaint to show preview
+            endPoint = new Point(e.getX(), e.getY());
+            canvas.repaint(); // Force repaint to show the preview
         } else {
             selectTool.onDrag(e);
         }
@@ -125,9 +121,7 @@ public class ShapeTool implements Tool {
     @Override
     public void onRelease(MouseEvent e) {
         if (isDrawing && startPoint != null) {
-            endPoint = TransformMouseEvent.transformPoint(new Point(e.getX(), e.getY()));
-//            endPoint = new Point(e.getX(), e.getY());
-            System.out.println("ShapeTool: Release at " + endPoint.x + "," + endPoint.y);
+            endPoint = new Point(e.getX(), e.getY());
             drawFinalShape();
         } else {
             selectTool.onRelease(e);
@@ -167,11 +161,11 @@ public class ShapeTool implements Tool {
             };
         }
 
-        // Add the listeners to the canvas
-        canvas.addMouseListener(mouseHandler);
-        canvas.addMouseMotionListener(mouseHandler);
+        // Only the paint listener is registered. Mouse events arrive through
+        // CanvasPanel's central dispatch (already mapped to image coordinates),
+        // so ShapeTool no longer adds its own mouse listeners, which previously
+        // caused the same click to be handled twice on a different coord path.
         canvas.addPaintListener(paintListener);
-        System.out.println("ShapeTool: Listeners added to canvas");
     }
 
     private void removeCanvasListeners() {
@@ -188,12 +182,16 @@ public class ShapeTool implements Tool {
     }
 
     private void drawPreviewShape(Graphics2D g) {
+        // The preview shares the renderer's zoomed Graphics, but the document's
+        // centering offset is applied separately, so apply it here too so the
+        // preview lines up with where the shape will actually be committed.
+        double zoom = canvas.getZoom();
+        g.translate(canvas.getRenderOffsetX() / zoom, canvas.getRenderOffsetY() / zoom);
+
         g.setColor(setColor());
         g.setStroke(new BasicStroke(strokeWidth));
         int x = Math.min(startPoint.x, endPoint.x);
-        System.out.println("x: " + x);
         int y = Math.min(startPoint.y, endPoint.y);
-        System.out.println("y: " + y);
 
         int width = Math.abs(endPoint.x - startPoint.x);
         int height = Math.abs(endPoint.y - startPoint.y);
