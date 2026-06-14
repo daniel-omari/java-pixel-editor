@@ -30,6 +30,14 @@ public class CanvasPanel extends JPanel {
     public CanvasPanel() {
         instance = this;
         canvasImage = new BufferedImage(800, 600, BufferedImage.TYPE_INT_ARGB);
+        // The document is a fixed-size page; fill it white up front. The
+        // surrounding panel is the gray workspace. (Previously the white fill
+        // happened lazily as the image grew to fill the window, which no longer
+        // happens now that the document is decoupled from the window size.)
+        Graphics2D initGraphics = canvasImage.createGraphics();
+        initGraphics.setColor(Color.WHITE);
+        initGraphics.fillRect(0, 0, canvasImage.getWidth(), canvasImage.getHeight());
+        initGraphics.dispose();
         setBackground(Color.GRAY);
         setupDrawingListeners();
 
@@ -309,30 +317,10 @@ public class CanvasPanel extends JPanel {
         return new Dimension(getParent().getWidth(), getParent().getHeight());
     }
 
-    @Override
-    public void doLayout() {
-        super.doLayout();
-
-        // Resize the canvas image if the panel is resized larger
-        if (getWidth() > canvasImage.getWidth() || getHeight() > canvasImage.getHeight()) {
-            resizeCanvasImage(Math.max(getWidth(), canvasImage.getWidth()),
-                    Math.max(getHeight(), canvasImage.getHeight()));
-        }
-    }
-
-    private void resizeCanvasImage(int width, int height) {
-        BufferedImage newImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D g2d = newImage.createGraphics();
-
-        // Fill with white background
-        g2d.setColor(Color.WHITE);
-        g2d.fillRect(0, 0, width, height);
-
-        g2d.drawImage(canvasImage, 0, 0, null);
-        g2d.dispose();
-
-        canvasImage = newImage;
-    }
+    // NOTE: intentionally no doLayout / image-resize override. The document is a
+    // fixed size and is centred in the panel by paintComponent, so resizing the
+    // window changes only the surrounding workspace, never the document or its
+    // pixels. (This is what decouples the canvas from the window size.)
 
     public void clearCanvas() { // Bug where this does not set the canvas to white.
         Graphics2D g2d = canvasImage.createGraphics();

@@ -50,7 +50,7 @@ public class PixelGraphicEditor {
         mainFrame.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(java.awt.event.ComponentEvent e) {
-                canvas.setWindowDimensions(); // Listener for window resizing.
+                canvas.repaint(); // Re-centre the fixed document when the window resizes.
             }
         });
         mainFrame.setResizable(true);
