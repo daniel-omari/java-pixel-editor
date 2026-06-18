@@ -13,6 +13,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.awt.image.BufferedImage;
 import java.util.function.Consumer;
+import com.danielomari.pixeleditor.layers.Layer;
+import com.danielomari.pixeleditor.layers.LayerStack;
 
 
 public class CanvasPanel extends JPanel {
@@ -22,23 +24,37 @@ public class CanvasPanel extends JPanel {
     private final List<Consumer<Graphics2D>> paintListeners = new ArrayList<>();
     private SelectTool selectTool = new SelectTool();
     private Tool currentTool = selectTool; // Default tool is set to null initially
-    private BufferedImage canvasImage;
+    private LayerStack layers; // the document is a stack of layers (index 0 = bottom)
+    private Runnable onLayersChanged; // notified when the stack changes structurally (e.g. New File)
+
+    // Workspace styling: a dark grey surround, a checkerboard behind the document
+    // (so a transparent canvas is still visible), and a thin document outline.
+    private static final Color WORKSPACE_BG = new Color(75, 75, 75);
+    private static final Color DOC_BORDER = new Color(40, 40, 40);
+    private static final TexturePaint CHECKER = makeChecker();
+
+    private static TexturePaint makeChecker() {
+        int s = 8; // square size in screen pixels
+        BufferedImage tile = new BufferedImage(s * 2, s * 2, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = tile.createGraphics();
+        g.setColor(new Color(205, 205, 205));
+        g.fillRect(0, 0, s * 2, s * 2);
+        g.setColor(new Color(165, 165, 165));
+        g.fillRect(0, 0, s, s);
+        g.fillRect(s, s, s, s);
+        g.dispose();
+        return new TexturePaint(tile, new Rectangle(0, 0, s * 2, s * 2));
+    }
     private float currentZoomFactor  = 1.0f;
     private RotateTool rotateTool/*  = new RotateTool()*/;
     private InsertTool insertTool/*  = new InsertTool()*/;
 
     public CanvasPanel() {
         instance = this;
-        canvasImage = new BufferedImage(800, 600, BufferedImage.TYPE_INT_ARGB);
-        // The document is a fixed-size page; fill it white up front. The
-        // surrounding panel is the gray workspace. (Previously the white fill
-        // happened lazily as the image grew to fill the window, which no longer
-        // happens now that the document is decoupled from the window size.)
-        Graphics2D initGraphics = canvasImage.createGraphics();
-        initGraphics.setColor(Color.WHITE);
-        initGraphics.fillRect(0, 0, canvasImage.getWidth(), canvasImage.getHeight());
-        initGraphics.dispose();
-        setBackground(Color.GRAY);
+        // The document is a stack of layers; the bottom one is an opaque white
+        // "Background". Every tool draws on whichever layer is currently active.
+        layers = new LayerStack(800, 600);
+        setBackground(WORKSPACE_BG);
         setupDrawingListeners();
 
         selectTool = new SelectTool();
@@ -62,8 +78,8 @@ public class CanvasPanel extends JPanel {
         int windowWidth = this.getWidth();
         int windowHeight = this.getHeight();
 
-        int canvasWidth = canvasImage.getWidth();
-        int canvasHeight = canvasImage.getHeight();
+        int canvasWidth = getCanvasImage().getWidth();
+        int canvasHeight = getCanvasImage().getHeight();
 
         if (windowWidth == 0 || windowHeight == 0) {
             return; // Avoid division by zero if the panel isn't fully initialized
@@ -81,15 +97,41 @@ public class CanvasPanel extends JPanel {
         setZoom(newZoomFactor);
     }
 
+    // The "canvas image" is the ACTIVE layer's image, so every existing tool and
+    // command that reads/writes getCanvasImage() now operates on the active layer.
     public BufferedImage getCanvasImage() {
-        return canvasImage;
+        return layers.active().getImage();
     }
 
     public void setCanvasImage(BufferedImage image) {
         if (image != null) {
-            this.canvasImage = image;
+            layers.active().setImage(image);
             repaint();
         }
+    }
+
+    // The layer model and the currently active layer (used by tools and commands).
+    public LayerStack getLayers() {
+        return layers;
+    }
+
+    public Layer getActiveLayer() {
+        return layers.active();
+    }
+
+    // Flattened view of all visible layers, for saving/export.
+    public BufferedImage getFlattenedImage() {
+        return layers.flatten();
+    }
+
+    // Let the Layers panel re-sync when the stack changes from outside it.
+    public void setOnLayersChanged(Runnable r) {
+        this.onLayersChanged = r;
+    }
+
+    // Trigger a Layers-panel refresh (used by structural layer commands on undo/redo).
+    public void notifyLayersChanged() {
+        if (onLayersChanged != null) onLayersChanged.run();
     }
 
     public float getZoom() {
@@ -112,19 +154,20 @@ public class CanvasPanel extends JPanel {
 
     // Top-left position of the (scaled) image within the panel.
     public int getRenderOffsetX() {
-        return (getWidth() - (int) (canvasImage.getWidth() * currentZoomFactor)) / 2;
+        return (getWidth() - (int) (getCanvasImage().getWidth() * currentZoomFactor)) / 2;
     }
 
     public int getRenderOffsetY() {
-        return (getHeight() - (int) (canvasImage.getHeight() * currentZoomFactor)) / 2;
+        return (getHeight() - (int) (getCanvasImage().getHeight() * currentZoomFactor)) / 2;
     }
 
-    // Panel (screen) pixel -> image pixel, clamped to the image bounds.
+    // Panel (screen) pixel -> image pixel. NOT clamped to the image: tools get the
+    // true coordinate, so a stroke that runs past the edge is clipped naturally by
+    // the canvas graphics instead of snapping onto the border. Tools that must stay
+    // in-bounds (selection capture, flood fill) clamp/bounds-check themselves.
     public Point screenToImage(int screenX, int screenY) {
         int imageX = (int) ((screenX - getRenderOffsetX()) / currentZoomFactor);
         int imageY = (int) ((screenY - getRenderOffsetY()) / currentZoomFactor);
-        imageX = Math.max(0, Math.min(imageX, canvasImage.getWidth() - 1));
-        imageY = Math.max(0, Math.min(imageY, canvasImage.getHeight() - 1));
         return new Point(imageX, imageY);
     }
 
@@ -275,21 +318,44 @@ public class CanvasPanel extends JPanel {
 
         Graphics2D g2d = (Graphics2D) g.create();
 
-        // Fill background
-        g2d.setColor(Color.GRAY);
+        // Fill the workspace with a dark grey, distinct from the document area.
+        g2d.setColor(WORKSPACE_BG);
         g2d.fillRect(0, 0, getWidth(), getHeight());
         Rectangle selectionBounds = selectTool.getSelectionBounds();
 
-        // Ensure canvasImage is not null before getting dimensions
-        if (canvasImage != null) {
+        if (layers != null) {
             int offsetX = getRenderOffsetX();
             int offsetY = getRenderOffsetY();
+            int docW = getCanvasImage().getWidth();
+            int docH = getCanvasImage().getHeight();
+            int dw = (int) (docW * currentZoomFactor);
+            int dh = (int) (docH * currentZoomFactor);
+
+            // Checkerboard backdrop so the document is visible even when its only
+            // layer is transparent; thin outline marks the document edge.
+            g2d.setPaint(CHECKER);
+            g2d.fillRect(offsetX, offsetY, dw, dh);
+            g2d.setColor(DOC_BORDER);
+            g2d.drawRect(offsetX, offsetY, dw - 1, dh - 1);
+
+            int ox = (int) (offsetX / currentZoomFactor);
+            int oy = (int) (offsetY / currentZoomFactor);
 
             // Apply zoom transformation
             g2d.scale(currentZoomFactor, currentZoomFactor);
 
-            // Draw the canvas image with scaling and centering offsets
-            g2d.drawImage(canvasImage, (int) (offsetX / currentZoomFactor), (int) (offsetY / currentZoomFactor), this);
+            // Composite the layers bottom-to-top at the document's centring offset,
+            // honouring each layer's visibility and opacity.
+            for (Layer layer : layers.layers()) {
+                if (!layer.getVisible()) continue;
+                Composite previous = g2d.getComposite();
+                if (layer.getOpacity() < 1f) {
+                    g2d.setComposite(AlphaComposite.getInstance(
+                            AlphaComposite.SRC_OVER, Math.max(0f, Math.min(1f, layer.getOpacity()))));
+                }
+                g2d.drawImage(layer.getImage(), ox, oy, this);
+                g2d.setComposite(previous);
+            }
 
             // Draw the selection overlay (box + handles). drawSelection applies
             // the centering offset itself, so it lines up with the document.
@@ -320,16 +386,9 @@ public class CanvasPanel extends JPanel {
 
     public void clearCanvas() {
         TextTool.forgetCommittedText(); // re-editable text no longer matches a cleared canvas
-        Graphics2D g2d = canvasImage.createGraphics();
-
-        g2d.setComposite(AlphaComposite.Clear);
-        g2d.fillRect(0, 0, canvasImage.getWidth(), canvasImage.getHeight());
-
-        g2d.setComposite(AlphaComposite.SrcOver);
-        g2d.setColor(Color.WHITE);
-        g2d.fillRect(0, 0, canvasImage.getWidth(), canvasImage.getHeight());
-
-        g2d.dispose();
+        // New File: collapse back to a single blank white background layer.
+        layers.reset();
+        if (onLayersChanged != null) onLayersChanged.run();
         revalidate();
         repaint();
     }

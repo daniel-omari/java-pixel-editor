@@ -52,11 +52,8 @@ public class Save {
                 }
 
 //                BufferedImage image = new BufferedImage(PixelGraphicEditor.getCanvas().getWidth(), PixelGraphicEditor.getCanvas().getHeight(), BufferedImage.TYPE_INT_RGB);
-                CanvasPanel.getInstance().setZoom(1.0f); // Reset zoom to 1.0 before saving
-                BufferedImage image = new BufferedImage(CanvasPanel.getInstance().getWidth(), CanvasPanel.getInstance().getHeight(), BufferedImage.TYPE_INT_RGB);
-                Graphics2D g2d = image.createGraphics();
-                PixelGraphicEditor.getCanvas().paint(g2d);
-                g2d.dispose();
+                // Save the flattened document (all visible layers), not the panel.
+                BufferedImage image = renderForSave(defaultFileFormat);
 
                 try {
                     ImageIO.write(image, defaultFileFormat, file);
@@ -81,13 +78,8 @@ public class Save {
                 defaultFileFormat = "png";
             }
 
-            CanvasPanel.getInstance().setZoom(1.0F); // Reset zoom to 1.0 before saving
-
-            BufferedImage image = new BufferedImage(PixelGraphicEditor.getCanvas().getWidth(),
-                    PixelGraphicEditor.getCanvas().getHeight(), BufferedImage.TYPE_INT_RGB);
-            Graphics2D g2d = image.createGraphics();
-            PixelGraphicEditor.getCanvas().paint(g2d);
-            g2d.dispose();
+            // Save the flattened document (all visible layers), not the panel.
+            BufferedImage image = renderForSave(defaultFileFormat);
 
             try {
                 ImageIO.write(image, defaultFileFormat, file);
@@ -97,6 +89,22 @@ public class Save {
                 e.printStackTrace();
             }
         }
+    }
+
+    // Flatten the layers for export. PNG keeps transparency; JPEG/BMP have no
+    // alpha channel, so those are composited onto a white background.
+    private static BufferedImage renderForSave(String format) {
+        BufferedImage flat = CanvasPanel.getInstance().getFlattenedImage();
+        if ("png".equals(format)) {
+            return flat;
+        }
+        BufferedImage rgb = new BufferedImage(flat.getWidth(), flat.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = rgb.createGraphics();
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, rgb.getWidth(), rgb.getHeight());
+        g.drawImage(flat, 0, 0, null);
+        g.dispose();
+        return rgb;
     }
 
     private static void resetSave() {

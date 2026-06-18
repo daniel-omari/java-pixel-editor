@@ -1,7 +1,10 @@
 package com.danielomari.pixeleditor.util.tools;
 
+import com.danielomari.pixeleditor.commands.AddTextLayerCommand;
 import com.danielomari.pixeleditor.commands.CommandManager;
 import com.danielomari.pixeleditor.commands.Drawcommand;
+import com.danielomari.pixeleditor.layers.Layer;
+import com.danielomari.pixeleditor.layers.LayerStack;
 import com.danielomari.pixeleditor.ui.CanvasPanel;
 
 import javax.swing.*;
@@ -9,39 +12,36 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.font.TextAttribute;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * Text tool with an MS-Paint / Photoshop style workflow:
+ * Text tool with an MS-Paint / Photoshop style workflow.
  *
- *   - Click on the canvas to drop a text box that grows as you type, OR
- *   - Drag a rectangle to get a fixed box that the text wraps inside and
- *     stays confined to.
+ * Click to drop a text box that grows as you type, or drag a rectangle to get a
+ * fixed box the text wraps inside. A live {@link JTextArea} overlay sits exactly
+ * where you clicked; Enter is a new line, clicking away or Esc commits.
  *
- * While editing, a real {@link JTextArea} overlay sits exactly where you clicked
- * (mapped through the canvas zoom + centring), so what you see is what you get.
- * Enter inserts a new line; clicking away or pressing Esc commits the text - it
- * is rasterised onto the canvas image and the overlay is removed.
- *
- * Committed text stays re-editable: each piece is remembered (content, box,
- * style) along with a snapshot of the pixels it was drawn over. Clicking an
- * existing text with the Text tool restores that backdrop (removing the baked
- * text) and re-opens it for editing.
+ * Each committed text block lives on ITS OWN layer (auto-named from the text),
+ * created just above the working layer. Because text never shares a layer with
+ * paint, painting elsewhere can't destroy it, and re-editing only clears that
+ * text's own box. Clicking existing text with the Text tool re-opens it.
  */
 public class TextTool implements Tool {
     private static TextTool instance;
 
     private static final int DEFAULT_BOX_W = 220; // click-mode box width (image px)
     private static final int DRAG_THRESHOLD = 4;  // below this, a drag counts as a click
-    private static final int MAX_ENTRIES = 100;   // cap on remembered text pieces
+    private static final int MAX_ENTRIES = 200;   // cap on remembered text pieces
 
     private CanvasPanel canvas;
     private JTextArea editor;          // the live editing overlay (null when not editing)
-    private Rectangle boxImage;        // editing box in image coordinates
     private boolean autoGrow;          // click mode grows in height; box mode is fixed
     private boolean isTyping = false;
     private long lastCommitAt = 0L;    // when a box was last committed (to swallow the dismiss-click)
@@ -51,11 +51,21 @@ public class TextTool implements Tool {
 
     private int fontSize = 16;
     private String selectedFont = "Arial";
+    private Color textColor = Color.BLACK; // current text colour (set in the Text settings)
+    private boolean bold = false;
+    private boolean italic = false;
+    private boolean underline = false;
 
     // Style of the edit currently in progress (so re-edits keep their own style).
     private String editFont = "Arial";
     private int editSize = 16;
     private Color editColor = Color.BLACK;
+    private boolean editBold = false;
+    private boolean editItalic = false;
+    private boolean editUnderline = false;
+
+    private TextEntry editingEntry;     // non-null while re-editing an existing text
+    private int prevActiveIndex;        // working layer to restore after a re-edit
     private Drawcommand pendingCommand; // undo snapshot spanning a re-edit
 
     // Remembered committed text, newest last. Shared across tool instances.
@@ -85,7 +95,7 @@ public class TextTool implements Tool {
         return instance;
     }
 
-    /** Forget all re-editable text (e.g. after New File / clear, when it no longer matches). */
+    /** Forget all re-editable text (e.g. after New File / clear). */
     public static void forgetCommittedText() {
         committed.clear();
     }
@@ -103,27 +113,30 @@ public class TextTool implements Tool {
         }
     }
 
-    public String getSelectedFont() {
-        return selectedFont;
-    }
-
-    public void setFontSize(int size) {
-        if (size > 0) this.fontSize = size;
-    }
+    public String getSelectedFont() { return selectedFont; }
+    public void setFontSize(int size) { if (size > 0) this.fontSize = size; }
+    public int getFontSize() { return fontSize; }
+    public Color getTextColor() { return textColor; }
+    public void setTextColor(Color c) { if (c != null) this.textColor = c; }
+    public boolean isBold() { return bold; }
+    public void setBold(boolean b) { this.bold = b; }
+    public boolean isItalic() { return italic; }
+    public void setItalic(boolean b) { this.italic = b; }
+    public boolean isUnderline() { return underline; }
+    public void setUnderline(boolean b) { this.underline = b; }
 
     public void setCanvas(CanvasPanel canvas) {
         this.canvas = canvas;
         if (canvas != null) {
-            // A null layout lets the overlay sit at absolute pixel positions.
-            canvas.setLayout(null);
+            canvas.setLayout(null); // overlay sits at absolute pixel positions
             canvas.addPaintListener(previewListener); // addPaintListener de-duplicates
         }
     }
 
-    /** Ask for a font size via a dialog. Used by the Text menu before placing text. */
+    /** Quick font-size dialog (right-click shortcut; the Text settings panel is the main way). */
     public void promptForFontSize() {
         String input = JOptionPane.showInputDialog(canvas, "Enter font size:", "Font Size", JOptionPane.PLAIN_MESSAGE);
-        if (input == null) return; // cancelled
+        if (input == null) return;
         try {
             int size = Integer.parseInt(input.trim());
             if (size > 0) {
@@ -141,15 +154,13 @@ public class TextTool implements Tool {
     @Override
     public void onPress(MouseEvent e) {
         if (canvas == null) canvas = CanvasPanel.getInstance();
-        // Clicking anywhere while a box is open commits it first (MS Paint style).
-        if (isTyping) {
+        if (isTyping) { // clicking while a box is open commits it first
             commit();
             return;
         }
-        // Swallow the same click that just dismissed a box (e.g. via focus-lost),
-        // so clicking/dragging away to finish typing doesn't start a new box.
+        // Swallow the same click that just dismissed a box so it doesn't start a new one.
         if (System.currentTimeMillis() - lastCommitAt < 250) return;
-        if (e.getButton() == MouseEvent.BUTTON3) { // right-click: set font size
+        if (e.getButton() == MouseEvent.BUTTON3) {
             promptForFontSize();
             return;
         }
@@ -185,59 +196,67 @@ public class TextTool implements Tool {
         Rectangle box;
         boolean grow;
         if (r.width < DRAG_THRESHOLD && r.height < DRAG_THRESHOLD) {
-            // Plain click: a point box with a default width that grows in height.
             box = new Rectangle(pressImg.x, pressImg.y, DEFAULT_BOX_W, fontSize + 8);
-            grow = true;
+            grow = true; // click: grow in height as you type
         } else {
-            // Dragged box: text wraps and is confined to these bounds.
             box = r;
-            grow = false;
+            grow = false; // dragged box: wrap + confine
         }
         if (canvas != null) canvas.repaint();
-        startEditing(box, grow); // new (empty) text in the current style
+        startEditing(box, grow);
     }
 
     // ---- re-editing committed text ----------------------------------------
 
     private TextEntry findEntryAt(Point p) {
+        LayerStack stack = (canvas != null) ? canvas.getLayers() : null;
         for (int i = committed.size() - 1; i >= 0; i--) {
-            if (committed.get(i).box.contains(p)) return committed.get(i);
+            TextEntry entry = committed.get(i);
+            if (!entry.box.contains(p)) continue;
+            if (stack != null && (stack.indexOf(entry.layer) < 0 || !entry.layer.getVisible())) {
+                continue; // text layer was deleted or is hidden
+            }
+            return entry;
         }
         return null;
     }
 
     private void beginReEdit(TextEntry entry) {
         canvas = CanvasPanel.getInstance();
-        // Snapshot for undo while the old text is still on the canvas.
-        pendingCommand = new Drawcommand(canvas);
-        // Remove the baked text by restoring what was underneath it.
-        Rectangle clip = entry.box.intersection(canvasBounds());
-        if (clip.width > 0 && clip.height > 0 && entry.underlay != null) {
-            Graphics2D g = canvas.getCanvasImage().createGraphics();
-            g.setComposite(AlphaComposite.Src);
-            g.drawImage(entry.underlay, clip.x, clip.y, null);
-            g.dispose();
-        }
+        LayerStack stack = canvas.getLayers();
+        int idx = stack.indexOf(entry.layer);
+        if (idx < 0) { committed.remove(entry); return; } // stale (layer deleted)
+
+        editingEntry = entry;
+        prevActiveIndex = stack.getActiveIndex();
+        stack.setActive(idx); // edits target the text's own layer
+        pendingCommand = new Drawcommand(canvas); // before = text layer with the old text
+        clearBox(entry.layer.getImage(), entry.box); // remove the old text from its own layer
         committed.remove(entry);
+        canvas.notifyLayersChanged();
         canvas.repaint();
-        startEditing(entry.box, entry.autoGrow, entry.text, entry.font, entry.size, entry.color);
+        startEditing(entry.box, entry.autoGrow, entry.text, entry.font, entry.size, entry.color,
+                entry.bold, entry.italic, entry.underline);
     }
 
     // ---- editing overlay --------------------------------------------------
 
-    // New (empty) text in the tool's current style.
     private void startEditing(Rectangle imageBox, boolean autoGrow) {
-        startEditing(imageBox, autoGrow, "", selectedFont, fontSize, ColorTool.getColor());
+        editingEntry = null; // brand-new text, not a re-edit
+        startEditing(imageBox, autoGrow, "", selectedFont, fontSize, textColor, bold, italic, underline);
     }
 
-    private void startEditing(Rectangle imageBox, boolean autoGrow, String text, String font, int size, Color color) {
+    private void startEditing(Rectangle imageBox, boolean autoGrow, String text, String font, int size,
+                              Color color, boolean b, boolean i, boolean u) {
         canvas = CanvasPanel.getInstance();
         canvas.setLayout(null);
-        this.boxImage = imageBox;
         this.autoGrow = autoGrow;
         this.editFont = font;
         this.editSize = size;
         this.editColor = color;
+        this.editBold = b;
+        this.editItalic = i;
+        this.editUnderline = u;
         isTyping = true;
 
         float zoom = canvas.getZoom();
@@ -248,7 +267,7 @@ public class TextTool implements Tool {
         editor = new JTextArea(text);
         editor.setLineWrap(true);
         editor.setWrapStyleWord(true);
-        editor.setOpaque(false); // show the canvas through the box (WYSIWYG)
+        editor.setOpaque(false);
         editor.setForeground(color);
         editor.setCaretColor(color);
         editor.setFont(makeFont(font, Math.max(1, Math.round(size * zoom))));
@@ -256,25 +275,14 @@ public class TextTool implements Tool {
         editor.setBounds(screen.x, screen.y, sw, sh);
         canvas.add(editor);
 
-        // Esc commits, and is consumed here so it doesn't also hit canvas key binds.
         editor.getInputMap(JComponent.WHEN_FOCUSED)
                 .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "commitText");
         editor.getActionMap().put("commitText", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                commit();
-            }
+            @Override public void actionPerformed(ActionEvent e) { commit(); }
         });
-
-        // Clicking away from the box commits it.
         editor.addFocusListener(new FocusAdapter() {
-            @Override
-            public void focusLost(FocusEvent e) {
-                commit();
-            }
+            @Override public void focusLost(FocusEvent e) { commit(); }
         });
-
-        // Click mode grows the box downward to fit the text as it is typed.
         if (autoGrow) {
             editor.getDocument().addDocumentListener(new DocumentListener() {
                 @Override public void insertUpdate(DocumentEvent e) { fitHeight(); }
@@ -290,7 +298,6 @@ public class TextTool implements Tool {
         if (autoGrow) fitHeight();
     }
 
-    // Grow the (click-mode) editor's height so all typed lines stay visible.
     private void fitHeight() {
         if (editor == null) return;
         Dimension pref = editor.getPreferredSize();
@@ -302,7 +309,7 @@ public class TextTool implements Tool {
         }
     }
 
-    /** Rasterise the overlay's text onto the canvas image and remove the overlay. */
+    /** Commit the overlay: draw onto the text's own layer and remove the overlay. */
     private void commit() {
         if (editor == null) return;
         JTextArea ed = editor;
@@ -311,60 +318,65 @@ public class TextTool implements Tool {
         lastCommitAt = System.currentTimeMillis();
 
         String text = ed.getText();
-        // Map the overlay's on-screen bounds back to image coordinates so the
-        // text lands exactly where the box was (undoes zoom + centring offset).
         Rectangle b = ed.getBounds();
         float zoom = canvas.getZoom();
         int ix = Math.round((b.x - canvas.getRenderOffsetX()) / zoom);
         int iy = Math.round((b.y - canvas.getRenderOffsetY()) / zoom);
         int iw = Math.round(b.width / zoom);
         int ih = Math.round(b.height / zoom);
+        Rectangle box = new Rectangle(ix, iy, iw, ih);
 
         canvas.remove(ed);
         canvas.repaint();
 
         boolean hasText = text != null && !text.trim().isEmpty();
-        if (hasText) {
-            rasterize(text, new Rectangle(ix, iy, iw, ih));
-        } else if (pendingCommand != null) {
-            // Re-edit whose text was cleared: the old text was already removed when
-            // we restored the underlay, so just finalise the command (the deletion).
-            pendingCommand.storeAfterState();
-            CommandManager.getInstance().executeCommand(pendingCommand);
-            pendingCommand = null;
-        }
-    }
+        LayerStack stack = canvas.getLayers();
 
-    // Draw the text onto the canvas image (wrapped, clipped to the box) and
-    // remember it so it can be edited again later.
-    private void rasterize(String text, Rectangle box) {
-        Rectangle clip = box.intersection(canvasBounds());
-        Drawcommand command = (pendingCommand != null) ? pendingCommand : new Drawcommand(canvas);
-        pendingCommand = null;
-
-        if (clip.width <= 0 || clip.height <= 0) {
-            // Box is off-canvas; nothing to draw, but finalise so undo stays sane.
-            command.storeAfterState();
-            CommandManager.getInstance().executeCommand(command);
+        if (editingEntry != null) {
+            // RE-EDIT: the text layer is active and its box was cleared in beginReEdit.
+            if (hasText) {
+                drawText(canvas.getActiveLayer().getImage(), text, box);
+                committed.add(new TextEntry(text, new Rectangle(box), editFont, editSize, editColor,
+                        editBold, editItalic, editUnderline, autoGrow, canvas.getActiveLayer()));
+            }
+            if (pendingCommand != null) {
+                pendingCommand.storeAfterState();
+                CommandManager.getInstance().executeCommand(pendingCommand);
+                pendingCommand = null;
+            }
+            stack.setActive(Math.min(prevActiveIndex, stack.getSize() - 1)); // back to working layer
+            editingEntry = null;
+            canvas.notifyLayersChanged();
+            canvas.repaint();
             return;
         }
 
-        // Snapshot what's under the box BEFORE drawing, so this text stays editable.
-        BufferedImage underlay = new BufferedImage(clip.width, clip.height, BufferedImage.TYPE_INT_ARGB);
-        Graphics2D ug = underlay.createGraphics();
-        ug.setComposite(AlphaComposite.Src);
-        ug.drawImage(canvas.getCanvasImage().getSubimage(clip.x, clip.y, clip.width, clip.height), 0, 0, null);
-        ug.dispose();
+        // NEW text: drop it on its own layer just above the working layer.
+        if (!hasText) return;
+        int prev = stack.getActiveIndex();
+        Layer textLayer = stack.addLayer(layerName(text)); // becomes active, above prev
+        int textIndex = stack.getActiveIndex();
+        drawText(textLayer.getImage(), text, box);
+        committed.add(new TextEntry(text, new Rectangle(box), editFont, editSize, editColor,
+                editBold, editItalic, editUnderline, autoGrow, textLayer));
+        if (committed.size() > MAX_ENTRIES) committed.remove(0);
+        CommandManager.getInstance().executeCommand(new AddTextLayerCommand(canvas, textLayer, textIndex, prev));
+        stack.setActive(Math.min(prev, stack.getSize() - 1)); // keep painting on the working layer
+        canvas.notifyLayersChanged();
+        canvas.repaint();
+    }
 
-        Graphics2D g = canvas.getCanvasImage().createGraphics();
+    // ---- drawing helpers --------------------------------------------------
+
+    // Draw the text onto a layer image (wrapped + clipped to the box).
+    private void drawText(BufferedImage target, String text, Rectangle box) {
+        Graphics2D g = target.createGraphics();
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         g.setFont(makeFont(editFont, editSize));
         g.setColor(editColor);
         FontMetrics fm = g.getFontMetrics();
         int lineH = fm.getHeight();
         int pad = 3;
-
-        // Keep the text inside the box so it stays confined to the drawn limits.
         Shape oldClip = g.getClip();
         g.setClip(box.x, box.y, box.width, box.height);
         int x = box.x + pad;
@@ -378,23 +390,25 @@ public class TextTool implements Tool {
         }
         g.setClip(oldClip);
         g.dispose();
-        canvas.repaint();
-
-        // Remember this text so clicking it again re-opens it for editing.
-        committed.add(new TextEntry(text, new Rectangle(clip), editFont, editSize, editColor, autoGrow, underlay));
-        if (committed.size() > MAX_ENTRIES) committed.remove(0);
-
-        command.storeAfterState();
-        CommandManager.getInstance().executeCommand(command);
     }
 
-    // ---- helpers ----------------------------------------------------------
-
-    private Rectangle canvasBounds() {
-        return new Rectangle(0, 0, canvas.getCanvasImage().getWidth(), canvas.getCanvasImage().getHeight());
+    // Clear a box region of a layer to transparent (removes old text on re-edit).
+    private void clearBox(BufferedImage target, Rectangle box) {
+        Graphics2D g = target.createGraphics();
+        g.setComposite(AlphaComposite.Clear);
+        g.fillRect(box.x, box.y, box.width, box.height);
+        g.dispose();
     }
 
-    // Word-wrap a single paragraph to the given pixel width.
+    // Name a text layer after its content (first line, trimmed).
+    private String layerName(String text) {
+        String first = text.trim();
+        int nl = first.indexOf('\n');
+        if (nl >= 0) first = first.substring(0, nl).trim();
+        if (first.isEmpty()) return "Text";
+        return first.length() > 24 ? first.substring(0, 24) + "..." : first;
+    }
+
     private List<String> wrapLine(String text, FontMetrics fm, int maxWidth) {
         List<String> lines = new ArrayList<>();
         if (text.isEmpty()) {
@@ -403,6 +417,22 @@ public class TextTool implements Tool {
         }
         StringBuilder line = new StringBuilder();
         for (String word : text.split(" ", -1)) {
+            // A word wider than the box is hard-broken by characters (like the editor),
+            // so long runs with no spaces still wrap instead of being clipped.
+            if (fm.stringWidth(word) > maxWidth) {
+                if (line.length() > 0) { lines.add(line.toString()); line = new StringBuilder(); }
+                StringBuilder chunk = new StringBuilder();
+                for (int i = 0; i < word.length(); i++) {
+                    char c = word.charAt(i);
+                    if (chunk.length() > 0 && fm.stringWidth(chunk.toString() + c) > maxWidth) {
+                        lines.add(chunk.toString());
+                        chunk = new StringBuilder();
+                    }
+                    chunk.append(c);
+                }
+                line = chunk; // leftover starts the next line so following words can join
+                continue;
+            }
             String candidate = line.length() == 0 ? word : line + " " + word;
             if (line.length() == 0 || fm.stringWidth(candidate) <= maxWidth) {
                 line = new StringBuilder(candidate);
@@ -415,40 +445,50 @@ public class TextTool implements Tool {
         return lines;
     }
 
-    // Build the chosen font, falling back to a logical sans-serif if unavailable.
+    // Build the edit's font with its style; fall back to a logical family if missing.
     private Font makeFont(String family, int size) {
-        Font f = new Font(family, Font.PLAIN, size);
-        if (!f.getFamily().equalsIgnoreCase(family)) {
-            f = new Font(Font.SANS_SERIF, Font.PLAIN, size);
+        String resolved = family;
+        if (!new Font(family, Font.PLAIN, size).getFamily().equalsIgnoreCase(family)) {
+            resolved = Font.SANS_SERIF;
         }
-        return f;
+        Map<TextAttribute, Object> attrs = new HashMap<>();
+        attrs.put(TextAttribute.FAMILY, resolved);
+        attrs.put(TextAttribute.SIZE, (float) size);
+        if (editBold) attrs.put(TextAttribute.WEIGHT, TextAttribute.WEIGHT_BOLD);
+        if (editItalic) attrs.put(TextAttribute.POSTURE, TextAttribute.POSTURE_OBLIQUE);
+        if (editUnderline) attrs.put(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON);
+        return new Font(attrs);
     }
 
-    // Normalised rectangle between two points.
     private Rectangle rectBetween(Point a, Point b) {
         int x = Math.min(a.x, b.x);
         int y = Math.min(a.y, b.y);
         return new Rectangle(x, y, Math.abs(b.x - a.x), Math.abs(b.y - a.y));
     }
 
-    // One remembered piece of committed text (re-editable).
+    // One remembered text block, bound to its own layer.
     private static final class TextEntry {
         final String text;
-        final Rectangle box;        // on-canvas region, image coords
+        final Rectangle box;
         final String font;
         final int size;
         final Color color;
+        final boolean bold, italic, underline;
         final boolean autoGrow;
-        final BufferedImage underlay; // pixels that were under the text
+        final Layer layer;
 
-        TextEntry(String text, Rectangle box, String font, int size, Color color, boolean autoGrow, BufferedImage underlay) {
+        TextEntry(String text, Rectangle box, String font, int size, Color color,
+                  boolean bold, boolean italic, boolean underline, boolean autoGrow, Layer layer) {
             this.text = text;
             this.box = box;
             this.font = font;
             this.size = size;
             this.color = color;
+            this.bold = bold;
+            this.italic = italic;
+            this.underline = underline;
             this.autoGrow = autoGrow;
-            this.underlay = underlay;
+            this.layer = layer;
         }
     }
 }

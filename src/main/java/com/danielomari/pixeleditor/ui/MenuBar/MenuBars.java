@@ -47,6 +47,7 @@ public class MenuBars {
 
     //public static JComboBox<String> textFontMenu; //create drop-down list
     private static JPopupMenu fontPopup;
+    private JDialog textSettingsDialog; // floating Text settings panel
 
     private MenuBars() {}
 
@@ -272,7 +273,7 @@ public class MenuBars {
             TextTool textTool = TextTool.getInstance();
             textTool.setCanvas(PixelGraphicEditor.getCanvas());
             PixelGraphicEditor.getCanvas().setTool(textTool);
-            showButtonOptions(text);
+            showTextSettings(text);
         });
 
         verticalBar.add(text);
@@ -582,6 +583,77 @@ public class MenuBars {
             instance = new MenuBars();
         }
         return instance;
+    }
+
+    // Floating Text settings panel anchored to the Text button: font, size,
+    // bold / italic / underline, and a custom colour. Applies live to new text.
+    private void showTextSettings(JButton anchor) {
+        if (textSettingsDialog != null && textSettingsDialog.isShowing()) {
+            textSettingsDialog.toFront();
+            return;
+        }
+        TextTool tt = TextTool.getInstance();
+
+        JPanel panel = new JPanel(new GridLayout(0, 1, 6, 6));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
+        List<String> fonts = Arrays.stream(ge.getAvailableFontFamilyNames())
+                .filter(f -> !isSymbolFont(f)).sorted().collect(Collectors.toList());
+        JComboBox<String> fontCombo = new JComboBox<>(fonts.toArray(new String[0]));
+        fontCombo.setSelectedItem(tt.getSelectedFont());
+        fontCombo.addActionListener(e -> {
+            Object v = fontCombo.getSelectedItem();
+            if (v != null) tt.setSelectedFont(v.toString());
+        });
+        panel.add(labeledField("Font", fontCombo));
+
+        JSpinner size = new JSpinner(new SpinnerNumberModel(tt.getFontSize(), 1, 500, 1));
+        size.addChangeListener(e -> tt.setFontSize((Integer) size.getValue()));
+        panel.add(labeledField("Size", size));
+
+        JToggleButton boldBtn = new JToggleButton("B", tt.isBold());
+        boldBtn.setFont(boldBtn.getFont().deriveFont(Font.BOLD, 13f));
+        boldBtn.addActionListener(e -> tt.setBold(boldBtn.isSelected()));
+        JToggleButton italicBtn = new JToggleButton("I", tt.isItalic());
+        italicBtn.setFont(italicBtn.getFont().deriveFont(Font.ITALIC, 13f));
+        italicBtn.addActionListener(e -> tt.setItalic(italicBtn.isSelected()));
+        JToggleButton underlineBtn = new JToggleButton("<html><u>U</u></html>", tt.isUnderline());
+        underlineBtn.addActionListener(e -> tt.setUnderline(underlineBtn.isSelected()));
+        JPanel styleRow = new JPanel(new GridLayout(1, 3, 4, 0));
+        styleRow.add(boldBtn);
+        styleRow.add(italicBtn);
+        styleRow.add(underlineBtn);
+        panel.add(labeledField("Style", styleRow));
+
+        JButton colourBtn = new JButton("Choose...");
+        colourBtn.setBackground(tt.getTextColor());
+        colourBtn.addActionListener(e -> {
+            Color c = JColorChooser.showDialog(anchor, "Text colour", tt.getTextColor());
+            if (c != null) {
+                tt.setTextColor(c);
+                colourBtn.setBackground(c);
+            }
+        });
+        panel.add(labeledField("Colour", colourBtn));
+
+        JDialog dialog = new JDialog(SwingUtilities.getWindowAncestor(anchor), "Text Settings");
+        dialog.setModalityType(Dialog.ModalityType.MODELESS);
+        dialog.setContentPane(panel);
+        dialog.pack();
+        Point loc = anchor.getLocationOnScreen();
+        dialog.setLocation(loc.x + anchor.getWidth() + 4, loc.y);
+        dialog.setVisible(true);
+        textSettingsDialog = dialog;
+    }
+
+    private JPanel labeledField(String label, JComponent field) {
+        JPanel row = new JPanel(new BorderLayout(8, 0));
+        JLabel l = new JLabel(label);
+        l.setPreferredSize(new Dimension(54, 1));
+        row.add(l, BorderLayout.WEST);
+        row.add(field, BorderLayout.CENTER);
+        return row;
     }
 
     public void showHelpDocumentation() {

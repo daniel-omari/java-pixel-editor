@@ -5,6 +5,7 @@ import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.danielomari.pixeleditor.ui.MenuBar.MenuBars;
 import com.danielomari.pixeleditor.util.Configuration;
 import com.danielomari.pixeleditor.ui.CanvasPanel;
+import com.danielomari.pixeleditor.ui.LayersPanel;
 import com.formdev.flatlaf.FlatLaf;
 import javax.swing.*;
 import java.awt.*;
@@ -46,6 +47,7 @@ public class PixelGraphicEditor {
         // Add components to frame
         mainFrame.add(MenuBars.verticalBar, BorderLayout.WEST);
         mainFrame.add(MenuBars.horizontalBar, BorderLayout.NORTH);
+        mainFrame.add(new LayersPanel(canvas), BorderLayout.EAST);
 
         mainFrame.addComponentListener(new ComponentAdapter() {
             @Override
