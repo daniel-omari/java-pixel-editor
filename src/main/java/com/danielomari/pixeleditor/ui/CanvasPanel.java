@@ -270,11 +270,16 @@ public class CanvasPanel extends JPanel {
             ((ShapeTool) tool).activate();
         } else if (tool instanceof MagnifierTool) {
             ((MagnifierTool) tool).activate();
+        } else if (tool instanceof EyedropperTool) {
+            ((EyedropperTool) tool).activate(this);
         }
         
         // Clean up previous tool if needed
         if (previousTool instanceof MagnifierTool) {
             ((MagnifierTool) previousTool).deactivate();
+        }
+        if (previousTool instanceof EyedropperTool) {
+            ((EyedropperTool) previousTool).deactivate();
         }
 
         // Reset cursor: the Text tool gets an I-beam so it's clear it is active.
