@@ -64,6 +64,15 @@ public class ShapeTool implements Tool {
         this.strokeWidth = strokeWidth;
     }
 
+    public int getStrokeWidth() { return strokeWidth; }
+
+    public String getCurrentShape() { return currentShape; }
+
+    public void setCurrentShape(String shape) {
+        this.currentShape = shape;
+        this.isDrawing = true;
+    }
+
     private void setupShapeMenu() {
         shapeMenu = new JPopupMenu();
         String[] shapes = {"Rectangle", "Circle", "Line", "Triangle", "Pentagon", "Hexagon"};

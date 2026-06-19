@@ -49,6 +49,7 @@ public class MenuBars {
     //public static JComboBox<String> textFontMenu; //create drop-down list
     private static JPopupMenu fontPopup;
     private JDialog textSettingsDialog; // floating Text settings panel
+    private JDialog toolDialog;          // floating Brush/Pencil settings panel
 
     private MenuBars() {}
 
@@ -116,48 +117,23 @@ public class MenuBars {
         brush = toolButton(Icons.brush(), "Brush - freehand drawing");
         brush.addActionListener(e -> {
             PixelGraphicEditor.getCanvas().setTool(new BrushTool());
-            showSubmenu(brush, brushMenu);
+            showBrushSettings(brush);
         });
-        // Show the submenu when clicked
-
         verticalBar.add(brush);
-        brushMenu = new JPopupMenu();
-        sizeMenu = new JPopupMenu();
-
-        // Brush type options
-        String[] brushNames = { "Natural Pencil", "Sprays", "Dotted Lines", "Oil Brush", "Stars Pattern" };
-        BrushTool.BrushType[] brushTypes = { BrushTool.BrushType.option1, BrushTool.BrushType.option2,BrushTool.BrushType.option3, BrushTool.BrushType.option4, BrushTool.BrushType.option5 };
-
-        // Brush size options
-        String[] sizeNames = { "SMALL", "MEDIUM", "LARGE" };
-        BrushTool.BrushSize[] sizes = { BrushTool.BrushSize.SMALL, BrushTool.BrushSize.MEDIUM, BrushTool.BrushSize.LARGE };
-
-
-        for (int i = 0; i < brushNames.length; i++) {
-            brushMenu.add(createBrushOption(brushNames[i], brushTypes[i]));
-        }
-        for (int i = 0; i < sizeNames.length; i++) {
-            sizeMenu.add(createBrushSizeOption(sizeNames[i], sizes[i]));
-        }
 
         JButton pencil = toolButton(Icons.pencil(), "Pencil");
-        pencil.addActionListener(e -> PixelGraphicEditor.getCanvas().setTool(new PencilTool()));
+        pencil.addActionListener(e -> {
+            PixelGraphicEditor.getCanvas().setTool(new PencilTool());
+            showPencilSettings(pencil);
+        });
         verticalBar.add(pencil);
 
         JButton eraser = toolButton(Icons.eraser(), "Eraser");
         eraser.addActionListener(e -> {
             PixelGraphicEditor.getCanvas().setTool(new EraserTool());
-            showSubmenu(eraser, eraserSizeMenu);
+            showEraserSettings(eraser);
         });
-
         verticalBar.add(eraser);
-        eraserSizeMenu = new JPopupMenu();
-
-        // Eraser size options
-        String[] eraserSizeNames = { "SMALL", "MEDIUM", "LARGE", "Extreme" }; // EraserSize Extreme is the fastest way to delete entire canvas for now
-        EraserTool.EraserSize[] eraserSizes = { EraserTool.EraserSize.SMALL, EraserTool.EraserSize.MEDIUM, EraserTool.EraserSize.LARGE, EraserTool.EraserSize.EXTREME };
-
-        for (int i = 0; i < eraserSizeNames.length; i++) {JMenuItem eraserSizeButton = createEraserSizeOption(eraserSizeNames[i], eraserSizes[i]);eraserSizeMenu.add(eraserSizeButton);}
 
         JButton fill = toolButton(Icons.fill(), "Fill - click the canvas to flood-fill with the current colour");
         ColorTool colorTool = new ColorTool();
@@ -168,8 +144,14 @@ public class MenuBars {
         eyedropper.addActionListener(e -> PixelGraphicEditor.getCanvas().setTool(new EyedropperTool()));
         verticalBar.add(eyedropper);
 
-        JButton shape = toolButton(Icons.shape(), "Shape");
-        shape.addActionListener(new shapeTool());
+        JButton shape = toolButton(Icons.shape(), "Shape - drag to draw");
+        shape.addActionListener(e -> {
+            ShapeTool st = ShapeTool.getInstance();
+            st.setCanvas(PixelGraphicEditor.getCanvas());
+            PixelGraphicEditor.getCanvas().setTool(st);
+            st.activate();
+            showShapeSettings(shape, st);
+        });
         verticalBar.add(shape);
         JButton select = toolButton(Icons.select(), "Select - move / resize / copy a region");
         select.addActionListener(e -> {
@@ -372,42 +354,6 @@ public class MenuBars {
         }
     }
 
-    // Creates Brush Option Buttons
-    private JMenuItem createBrushOption(String name, BrushTool.BrushType type) {
-        JMenuItem typeItem = new JMenuItem(name);
-        typeItem.addActionListener(e -> {
-            BrushTool.setBrushType(type);
-            showSecondaryMenu();
-        });
-        return typeItem;
-    }
-
-    private void showSecondaryMenu() {
-        SwingUtilities.invokeLater(() -> {
-            sizeMenu.show(brush, brush.getWidth(), 0);
-        });
-    }
-
-    // Creates Brush Size Buttons
-    private JMenuItem createBrushSizeOption(String name, BrushTool.BrushSize size) {
-        JMenuItem sizeItem = new JMenuItem(name);
-        sizeItem.addActionListener(e -> {
-            BrushTool.setBrushSize(size);
-            sizeMenu.setVisible(false);
-        });
-        return sizeItem;
-    }
-
-    // Creates Eraser Size Buttons
-    private JMenuItem createEraserSizeOption(String name, EraserTool.EraserSize size) {
-        JMenuItem eraserSizeItem = new JMenuItem(name);
-        eraserSizeItem.addActionListener(e -> {
-            EraserTool.setEraserSize(size);
-            eraserSizeMenu.setVisible(false);
-        });
-        return eraserSizeItem;
-    }
-
     private static void showButtonOptions(JButton button){
         JPopupMenu menuToShow = null;
 
@@ -601,6 +547,89 @@ public class MenuBars {
         row.add(l, BorderLayout.WEST);
         row.add(field, BorderLayout.CENTER);
         return row;
+    }
+
+    // Brush settings: style + size + opacity, in one floating panel.
+    private void showBrushSettings(JButton anchor) {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 6, 6));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        String[] styleNames = {"Natural", "Spray", "Dotted", "Oil", "Stars"};
+        BrushTool.BrushType[] types = {
+                BrushTool.BrushType.option1, BrushTool.BrushType.option2, BrushTool.BrushType.option3,
+                BrushTool.BrushType.option4, BrushTool.BrushType.option5
+        };
+        JComboBox<String> style = new JComboBox<>(styleNames);
+        style.setSelectedIndex(BrushTool.getBrushType().ordinal());
+        style.addActionListener(e -> BrushTool.setBrushType(types[style.getSelectedIndex()]));
+        panel.add(labeledField("Style", style));
+
+        JSlider size = new JSlider(1, 60, BrushTool.getSizePx());
+        size.addChangeListener(e -> BrushTool.setSizePx(size.getValue()));
+        panel.add(labeledField("Size", size));
+
+        JSlider opacity = new JSlider(0, 100, Math.round(BrushTool.getOpacity() * 100));
+        opacity.addChangeListener(e -> BrushTool.setOpacity(opacity.getValue() / 100f));
+        panel.add(labeledField("Opacity", opacity));
+
+        showToolDialog("Brush", anchor, panel);
+    }
+
+    // Pencil settings: size + opacity.
+    private void showPencilSettings(JButton anchor) {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 6, 6));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+
+        JSlider size = new JSlider(1, 20, PencilTool.getSize());
+        size.addChangeListener(e -> PencilTool.setSize(size.getValue()));
+        panel.add(labeledField("Size", size));
+
+        JSlider opacity = new JSlider(0, 100, Math.round(PencilTool.getOpacity() * 100));
+        opacity.addChangeListener(e -> PencilTool.setOpacity(opacity.getValue() / 100f));
+        panel.add(labeledField("Opacity", opacity));
+
+        showToolDialog("Pencil", anchor, panel);
+    }
+
+    // Eraser settings: size.
+    private void showEraserSettings(JButton anchor) {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 6, 6));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        JSlider size = new JSlider(1, 100, EraserTool.getSize());
+        size.addChangeListener(e -> EraserTool.setSize(size.getValue()));
+        panel.add(labeledField("Size", size));
+        showToolDialog("Eraser", anchor, panel);
+    }
+
+    // Shape settings: which shape to draw + the stroke width.
+    private void showShapeSettings(JButton anchor, ShapeTool shapeTool) {
+        JPanel panel = new JPanel(new GridLayout(0, 1, 6, 6));
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        String[] shapes = {"Rectangle", "Circle", "Line", "Triangle", "Pentagon", "Hexagon"};
+        JComboBox<String> shapeBox = new JComboBox<>(shapes);
+        shapeBox.setSelectedItem(shapeTool.getCurrentShape());
+        shapeBox.addActionListener(e -> {
+            Object v = shapeBox.getSelectedItem();
+            if (v != null) shapeTool.setCurrentShape(v.toString());
+        });
+        panel.add(labeledField("Shape", shapeBox));
+        JSlider stroke = new JSlider(1, 30, shapeTool.getStrokeWidth());
+        stroke.addChangeListener(e -> shapeTool.setStrokeWidth(stroke.getValue()));
+        panel.add(labeledField("Stroke", stroke));
+        showToolDialog("Shape", anchor, panel);
+    }
+
+    // Shared floating settings dialog anchored to a tool button.
+    private void showToolDialog(String title, JButton anchor, JComponent content) {
+        if (toolDialog != null) toolDialog.dispose();
+        JDialog d = new JDialog(SwingUtilities.getWindowAncestor(anchor), title);
+        d.setModalityType(Dialog.ModalityType.MODELESS);
+        d.setContentPane(content);
+        d.pack();
+        Point loc = anchor.getLocationOnScreen();
+        d.setLocation(loc.x + anchor.getWidth() + 4, loc.y);
+        d.setVisible(true);
+        toolDialog = d;
     }
 
     public void showHelpDocumentation() {

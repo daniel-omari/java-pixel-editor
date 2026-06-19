@@ -1,209 +1,189 @@
 package com.danielomari.pixeleditor.util.tools;
 
-import java.awt.*;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.List;
-
-import com.danielomari.pixeleditor.util.tools.Tool;
-import com.danielomari.pixeleditor.ui.CanvasPanel;
-import java.awt.geom.GeneralPath;
-import java.awt.geom.Ellipse2D;
-import java.awt.geom.AffineTransform;
-import com.danielomari.pixeleditor.util.tools.ColorTool;
 import com.danielomari.pixeleditor.commands.CommandManager;
 import com.danielomari.pixeleditor.commands.Drawcommand;
-import java.awt.Shape;  
-import java.awt.geom.Path2D; 
+import com.danielomari.pixeleditor.ui.CanvasPanel;
 
+import java.awt.*;
+import java.awt.event.MouseEvent;
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Ellipse2D;
+import java.awt.geom.GeneralPath;
+import java.awt.image.BufferedImage;
+import java.util.function.Consumer;
+
+/**
+ * Brush tool: five styles (natural, spray, dotted, oil, stars), a continuous
+ * size, and a stroke opacity. The whole stroke is painted to an off-screen
+ * buffer at full strength and composited onto the active layer once, at the
+ * chosen opacity, so overlapping segments don't darken at the joints.
+ */
 public class BrushTool implements Tool {
-    private static int prevX = -1, prevY = -1; // Store previous positions
-    private static BrushType selectedBrushType = BrushType.option1; // Default brush
-    private static BrushSize selectedBrushSize = BrushSize.MEDIUM; //default brush size
-    private final List<Point> points = new ArrayList<>();
-    private int size; // Brush size
+    public enum BrushType { option1, option2, option3, option4, option5 }
+
+    private static BrushType selectedBrushType = BrushType.option1;
+    private static int sizePx = 10;
+    private static float opacity = 1f;
+
+    private int prevX = -1, prevY = -1;
+    private CanvasPanel canvas;
+    private BufferedImage strokeBuffer; // the in-progress stroke (full strength)
+    private Graphics2D strokeG;
     private Drawcommand currentCommand;
     private boolean isDrawing = false;
 
-    public static void setBrushType(BrushType brushType) {
-        selectedBrushType = brushType;
-        System.out.println("Selected Brush: " + selectedBrushType);
-    }
+    // Live preview: draw the buffer over the canvas at the chosen opacity.
+    private final Consumer<Graphics2D> previewListener = g -> {
+        if (strokeBuffer == null || canvas == null) return;
+        Graphics2D g2 = (Graphics2D) g.create();
+        double zoom = canvas.getZoom();
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, clampOpacity()));
+        g2.drawImage(strokeBuffer,
+                (int) (canvas.getRenderOffsetX() / zoom),
+                (int) (canvas.getRenderOffsetY() / zoom), null);
+        g2.dispose();
+    };
 
-    public static void setBrushSize(BrushSize brushSize) {
-        selectedBrushSize = brushSize;
-        System.out.println("Selected size: " + selectedBrushSize);
-    }
+    // ---- settings ----
+    public static void setBrushType(BrushType t) { selectedBrushType = t; }
+    public static BrushType getBrushType() { return selectedBrushType; }
+    public static void setSizePx(int px) { if (px > 0) sizePx = px; }
+    public static int getSizePx() { return sizePx; }
+    public static void setOpacity(float o) { opacity = Math.max(0f, Math.min(1f, o)); }
+    public static float getOpacity() { return opacity; }
+    private static float clampOpacity() { return Math.max(0f, Math.min(1f, opacity)); }
 
     @Override
     public void onPress(MouseEvent e) {
+        canvas = CanvasPanel.getInstance();
+        currentCommand = new Drawcommand(canvas);
+        BufferedImage layer = canvas.getCanvasImage();
+        strokeBuffer = new BufferedImage(layer.getWidth(), layer.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        strokeG = strokeBuffer.createGraphics();
+        strokeG.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        canvas.addPaintListener(previewListener);
         isDrawing = true;
-        currentCommand = new Drawcommand(CanvasPanel.getInstance());
-
-        points.clear();
-        points.add(e.getPoint());
         prevX = e.getX();
         prevY = e.getY();
-        drawOnCanvas(prevX, prevY, prevX, prevY);
+        paintSegment(prevX, prevY, prevX, prevY);
+        canvas.repaint();
     }
 
     @Override
     public void onDrag(MouseEvent e) {
         if (!isDrawing) return;
-        int x = e.getX();
-        int y = e.getY();
-
-        points.add(e.getPoint());
-        drawOnCanvas(prevX, prevY, x, y); // Draw continuous line
-
-        prevX = x;
-        prevY = y;
+        paintSegment(prevX, prevY, e.getX(), e.getY());
+        prevX = e.getX();
+        prevY = e.getY();
+        canvas.repaint();
     }
 
     @Override
     public void onRelease(MouseEvent e) {
         if (!isDrawing) return;
+        paintSegment(prevX, prevY, e.getX(), e.getY());
 
-        int x = e.getX();
-        int y = e.getY();
+        // Composite the finished stroke onto the active layer once, at the opacity.
+        Graphics2D lg = canvas.getCanvasImage().createGraphics();
+        lg.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, clampOpacity()));
+        lg.drawImage(strokeBuffer, 0, 0, null);
+        lg.dispose();
 
-        // Draw final segment if needed
-        if (prevX != -1 && prevY != -1) {
-            points.add(e.getPoint());
-            drawOnCanvas(prevX, prevY, x, y);
-        }
+        canvas.removePaintListener(previewListener);
+        if (strokeG != null) strokeG.dispose();
+        strokeBuffer = null;
+        strokeG = null;
+        prevX = prevY = -1;
+        isDrawing = false;
 
-        // Reset previous coordinates
-        prevX = -1;
-        prevY = -1;
-
-        // For undo/redo functionality
         if (currentCommand != null) {
             currentCommand.storeAfterState();
             CommandManager.getInstance().executeCommand(currentCommand);
             currentCommand = null;
         }
-
-        isDrawing = false;
+        canvas.repaint();
     }
 
-    //develop a method to get color from colorTool
-    private Color setColor() {
-        Color color = ColorTool.getColor();
-        return color;
-    }
+    // Paint one stroke segment onto the buffer at full strength.
+    private void paintSegment(int x1, int y1, int x2, int y2) {
+        if (strokeG == null) return;
+        int size = sizePx;
+        strokeG.setColor(ColorTool.getColor());
 
-    private void drawOnCanvas(int x1, int y1, int x2, int y2) {
-        CanvasPanel canvasPanel = CanvasPanel.getInstance();
-        Graphics2D g2d = canvasPanel.getCanvasImage().createGraphics();
-
-        switch (selectedBrushSize) {
-            case SMALL -> size = 5;
-            case MEDIUM -> size = 10;
-            case LARGE -> size = 15;
-            default -> size = 5;
-        }
-        g2d.setColor(setColor());
-
-        // Natural pencil is one connected stroke, so it already fills any gaps.
-        if (selectedBrushType == BrushType.option1) {
-            g2d.setStroke(new BasicStroke(size, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-            g2d.drawLine(x1, y1, x2, y2);
-            g2d.dispose();
-            canvasPanel.repaint();
+        if (selectedBrushType == BrushType.option1) { // natural: one connected line
+            strokeG.setStroke(new BasicStroke(size, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+            strokeG.drawLine(x1, y1, x2, y2);
             return;
         }
 
-        // Stamp-based brushes: walk along this segment at a fixed spacing and
-        // stamp at every step, so the stroke stays continuous no matter how fast
-        // the mouse moves (sparse drag events no longer leave gaps).
-        double dx = x2 - x1;
-        double dy = y2 - y1;
+        // Stamp-based styles: walk the segment at a fixed spacing so fast strokes
+        // stay continuous.
+        double dx = x2 - x1, dy = y2 - y1;
         double distance = Math.hypot(dx, dy);
         double spacing = switch (selectedBrushType) {
-            case option3 -> Math.max(2.0, size * 0.8); // dotted: even, visible gaps
-            case option5 -> Math.max(2.0, size * 0.9); // stars: spaced out
-            default -> Math.max(1.0, size * 0.25);      // spray / oil: dense fill
+            case option3 -> Math.max(2.0, size * 0.8); // dotted
+            case option5 -> Math.max(2.0, size * 0.9); // stars
+            default -> Math.max(1.0, size * 0.25);      // spray / oil
         };
         int steps = (int) Math.max(1, Math.round(distance / spacing));
         for (int s = 0; s <= steps; s++) {
             double t = (double) s / steps;
-            int px = (int) Math.round(x1 + dx * t);
-            int py = (int) Math.round(y1 + dy * t);
-            stamp(g2d, px, py);
+            stamp(strokeG, (int) Math.round(x1 + dx * t), (int) Math.round(y1 + dy * t), size);
         }
-
-        g2d.dispose();
-        canvasPanel.repaint();
     }
 
-    // Paints a single brush stamp at one point for the stamp-based styles.
-    // drawOnCanvas calls this repeatedly along the stroke.
-    private void stamp(Graphics2D g2d, int px, int py) {
+    private void stamp(Graphics2D g, int px, int py, int size) {
         switch (selectedBrushType) {
-            case option2 -> { // spray: a small cluster of random dots
+            case option2 -> { // spray: random dot cluster
                 for (int j = 0; j < 3; j++) {
-                    int offsetX = (int) (Math.random() * size - size / 2.0);
-                    int offsetY = (int) (Math.random() * size - size / 2.0);
-                    int dotSize = (int) (size * 0.5 + Math.random() * 2);
-                    g2d.fill(new Ellipse2D.Double(px + offsetX, py + offsetY, dotSize, dotSize));
+                    int ox = (int) (Math.random() * size - size / 2.0);
+                    int oy = (int) (Math.random() * size - size / 2.0);
+                    int dot = (int) (size * 0.5 + Math.random() * 2);
+                    g.fill(new Ellipse2D.Double(px + ox, py + oy, dot, dot));
                 }
             }
-            case option3 -> { // dotted line: one small dot per step
-                int dotSize = (int) (size * 0.3);
-                g2d.fill(new Ellipse2D.Double(px - dotSize / 2.0, py - dotSize / 2.0, dotSize, dotSize));
+            case option3 -> { // dotted: one small dot per step
+                int dot = (int) (size * 0.3);
+                g.fill(new Ellipse2D.Double(px - dot / 2.0, py - dot / 2.0, dot, dot));
             }
             case option4 -> { // oil: translucent bristle cluster
-                g2d.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
-                Color baseColor = ColorTool.getColor();
+                Color base = ColorTool.getColor();
                 for (int i = 0; i < 10; i++) {
-                    int offsetX = (int) (Math.random() * size - size / 2.0);
-                    int offsetY = (int) (Math.random() * size - size / 2.0);
+                    int ox = (int) (Math.random() * size - size / 2.0);
+                    int oy = (int) (Math.random() * size - size / 2.0);
                     int alpha = (int) (Math.random() * 150 + 100);
-                    g2d.setColor(new Color(baseColor.getRed(), baseColor.getGreen(),
-                            baseColor.getBlue(), alpha));
-                    g2d.fillOval(px + offsetX, py + offsetY, size, size);
+                    g.setColor(new Color(base.getRed(), base.getGreen(), base.getBlue(), alpha));
+                    g.fillOval(px + ox, py + oy, size, size);
                 }
+                g.setColor(base);
             }
             case option5 -> { // star
-                AffineTransform original = g2d.getTransform();
+                AffineTransform original = g.getTransform();
                 try {
-                    double offsetX = (Math.random() - 0.5) * size * 0.3;
-                    double offsetY = (Math.random() - 0.5) * size * 0.3;
+                    double ox = (Math.random() - 0.5) * size * 0.3;
+                    double oy = (Math.random() - 0.5) * size * 0.3;
                     AffineTransform at = new AffineTransform();
-                    at.translate(px + offsetX, py + offsetY);
-                    g2d.setTransform(at);
-                    g2d.fill(createStar(5, size * 0.6, size * 0.6 * 0.4));
+                    at.translate(px + ox, py + oy);
+                    g.setTransform(at);
+                    g.fill(createStar(5, size * 0.6, size * 0.24));
                 } finally {
-                    g2d.setTransform(original);
+                    g.setTransform(original);
                 }
             }
             default -> { }
         }
     }
 
-    // helper method to create star shapes
-    private Shape createStar(int points, double outerRadius, double innerRadius) {
+    private Shape createStar(int points, double outer, double inner) {
         GeneralPath path = new GeneralPath();
         double angle = Math.PI / points;
-        
         for (int i = 0; i < 2 * points; i++) {
-            double r = (i % 2 == 0) ? outerRadius : innerRadius;
+            double r = (i % 2 == 0) ? outer : inner;
             double x = r * Math.cos(i * angle);
             double y = r * Math.sin(i * angle);
-            
-            if (i == 0) {
-                path.moveTo(x, y);
-            } else {
-                path.lineTo(x, y);
-            }
+            if (i == 0) path.moveTo(x, y); else path.lineTo(x, y);
         }
-        
         path.closePath();
         return path;
     }
-
-    public enum BrushType {option1, option2, option3, option4, option5}
-
-    public enum BrushSize {SMALL, MEDIUM, LARGE}
 }

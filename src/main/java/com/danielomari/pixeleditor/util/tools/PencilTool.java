@@ -1,94 +1,102 @@
 package com.danielomari.pixeleditor.util.tools;
 
-import java.awt.*;
-import java.awt.event.MouseEvent;
-import java.util.ArrayList;
-import java.util.List;
-
-import com.danielomari.pixeleditor.util.tools.Tool;
-import com.danielomari.pixeleditor.ui.CanvasPanel;
 import com.danielomari.pixeleditor.commands.CommandManager;
 import com.danielomari.pixeleditor.commands.Drawcommand;
-import com.danielomari.pixeleditor.util.tools.ColorTool;
+import com.danielomari.pixeleditor.ui.CanvasPanel;
 
+import java.awt.*;
+import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.util.function.Consumer;
+
+/**
+ * Pencil tool: a hard (aliased) round stroke with a configurable size and
+ * opacity. Like the brush, the stroke is painted to a buffer and composited
+ * once at the chosen opacity so it doesn't darken where segments overlap.
+ */
 public class PencilTool implements Tool {
-    private static int prevX = -1, prevY = -1; // Store previous positions
-    private final int size = 2; // Pencil size
-    private final List<Point> points = new ArrayList<>();
+    private static int sizePx = 2;
+    private static float opacity = 1f;
+
+    private int prevX = -1, prevY = -1;
     private CanvasPanel canvas;
+    private BufferedImage strokeBuffer;
+    private Graphics2D strokeG;
     private Drawcommand currentCommand;
     private boolean isDrawing = false;
-//    private Point lastPoint;
+
+    private final Consumer<Graphics2D> previewListener = g -> {
+        if (strokeBuffer == null || canvas == null) return;
+        Graphics2D g2 = (Graphics2D) g.create();
+        double zoom = canvas.getZoom();
+        g2.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, clampOpacity()));
+        g2.drawImage(strokeBuffer,
+                (int) (canvas.getRenderOffsetX() / zoom),
+                (int) (canvas.getRenderOffsetY() / zoom), null);
+        g2.dispose();
+    };
+
+    public static void setSize(int px) { if (px > 0) sizePx = px; }
+    public static int getSize() { return sizePx; }
+    public static void setOpacity(float o) { opacity = Math.max(0f, Math.min(1f, o)); }
+    public static float getOpacity() { return opacity; }
+    private static float clampOpacity() { return Math.max(0f, Math.min(1f, opacity)); }
 
     @Override
     public void onPress(MouseEvent e) {
+        canvas = CanvasPanel.getInstance();
+        currentCommand = new Drawcommand(canvas);
+        BufferedImage layer = canvas.getCanvasImage();
+        strokeBuffer = new BufferedImage(layer.getWidth(), layer.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        strokeG = strokeBuffer.createGraphics(); // no antialiasing: hard pencil edges
+        canvas.addPaintListener(previewListener);
         isDrawing = true;
-        currentCommand = new Drawcommand(CanvasPanel.getInstance());
-        points.clear(); // starts a new stroke
-        points.add(e.getPoint());
-
         prevX = e.getX();
         prevY = e.getY();
-
-        drawOnCanvas(prevX, prevY, prevX, prevY); // Draw initial dot
-
-//        Point lastPoint = new Point(e.getX(), e.getY());
-        isDrawing = true;
+        paintSegment(prevX, prevY, prevX, prevY);
+        canvas.repaint();
     }
 
     @Override
     public void onDrag(MouseEvent e) {
         if (!isDrawing) return;
-        int x = e.getX();
-        int y = e.getY();
-
-        points.add(e.getPoint());
-        drawOnCanvas(prevX, prevY, x, y); // Draw continuous line
-
-        prevX = x;
-        prevY = y;
+        paintSegment(prevX, prevY, e.getX(), e.getY());
+        prevX = e.getX();
+        prevY = e.getY();
+        canvas.repaint();
     }
 
     @Override
     public void onRelease(MouseEvent e) {
         if (!isDrawing) return;
+        paintSegment(prevX, prevY, e.getX(), e.getY());
 
-        int x = e.getX();
-        int y = e.getY();
+        Graphics2D lg = canvas.getCanvasImage().createGraphics();
+        lg.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, clampOpacity()));
+        lg.drawImage(strokeBuffer, 0, 0, null);
+        lg.dispose();
 
-        // Draw final segment if needed
-        if (prevX != -1 && prevY != -1) {
-            points.add(e.getPoint());
-            drawOnCanvas(prevX, prevY, x, y);
-        }
+        canvas.removePaintListener(previewListener);
+        if (strokeG != null) strokeG.dispose();
+        strokeBuffer = null;
+        strokeG = null;
+        prevX = prevY = -1;
+        isDrawing = false;
 
-        // Reset previous coordinates
-        prevX = -1;
-        prevY = -1;
-
-        // Complete command
         if (currentCommand != null) {
             currentCommand.storeAfterState();
             CommandManager.getInstance().executeCommand(currentCommand);
             currentCommand = null;
         }
-
-        isDrawing = false;
+        canvas.repaint();
     }
 
-    private void drawOnCanvas(int x1, int y1, int x2, int y2) {
-        CanvasPanel canvasPanel = CanvasPanel.getInstance();
-        Graphics2D g2d = canvasPanel.getCanvasImage().createGraphics();
-
-        g2d.setColor(ColorTool.getColor());
-        g2d.setStroke(new BasicStroke(size, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND)); // Smoother lines
-        g2d.drawLine(x1, y1, x2, y2);
-
-        g2d.dispose();
-        canvasPanel.repaint();
+    private void paintSegment(int x1, int y1, int x2, int y2) {
+        if (strokeG == null) return;
+        strokeG.setColor(ColorTool.getColor());
+        strokeG.setStroke(new BasicStroke(sizePx, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
+        strokeG.drawLine(x1, y1, x2, y2);
     }
 
-    public void setCanvas(CanvasPanel canvas) {
-        this.canvas = canvas;
-    }
+    public void setCanvas(CanvasPanel canvas) { this.canvas = canvas; }
 }
