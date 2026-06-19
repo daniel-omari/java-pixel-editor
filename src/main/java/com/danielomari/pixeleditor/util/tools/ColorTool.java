@@ -21,6 +21,7 @@ public class ColorTool implements Tool, ActionListener {
     //Default color is set to black
     private static Color currentColor = Color.BLACK;
     private static List<Color> recentColors = new ArrayList<>();
+    private static final List<Runnable> changeListeners = new ArrayList<>();
     private BufferedImage canvasImage;
     private Drawcommand currentCommand;
     private CanvasPanel canvas;
@@ -38,13 +39,21 @@ public class ColorTool implements Tool, ActionListener {
             selectTool.recolourSelection(color);
         }
         addRecentColour(color);
+        fireColorChanged();
         System.out.println("Color changed to: " + color);
     }
     // Set the current colour WITHOUT recolouring an active selection (eyedropper).
     public static void pickColor(Color color) {
         currentColor = color;
         addRecentColour(color);
-        System.out.println("Picked color: " + color);
+        fireColorChanged();
+    }
+
+    // Live update while dragging a picker: set the colour + notify, but don't
+    // spam the recent-colours list (that happens on commit via pickColor).
+    public static void setCurrentColorLive(Color color) {
+        currentColor = color;
+        fireColorChanged();
     }
 
     private static void addRecentColour(Color color) {
@@ -59,6 +68,15 @@ public class ColorTool implements Tool, ActionListener {
 
     public static List<Color> getRecentColors() {
         return recentColors;
+    }
+
+    // Notify UI (e.g. the Colour panel) when the current colour changes.
+    public static void addColorChangeListener(Runnable r) {
+        changeListeners.add(r);
+    }
+
+    private static void fireColorChanged() {
+        for (Runnable r : changeListeners) r.run();
     }
 
     @Override
@@ -79,7 +97,7 @@ public class ColorTool implements Tool, ActionListener {
 
     @Override
     public void onPress(MouseEvent e) {
-        if (e.getButton() == MouseEvent.BUTTON3) { // Right-click
+        if (e.getButton() == MouseEvent.BUTTON1 || e.getButton() == MouseEvent.BUTTON3) { // left or right click fills
             canvas = CanvasPanel.getInstance();
             currentCommand = new Drawcommand(canvas);
 

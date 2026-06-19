@@ -4,6 +4,7 @@ import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.danielomari.pixeleditor.commands.CommandManager;
 import com.danielomari.pixeleditor.ui.CanvasPanel;
+import com.danielomari.pixeleditor.ui.Icons;
 import com.danielomari.pixeleditor.util.Configuration;
 import com.danielomari.pixeleditor.PixelGraphicEditor;
 import com.danielomari.pixeleditor.util.Help;
@@ -98,8 +99,7 @@ public class MenuBars {
             config.getUpdatedConfiguration();
             // Update UI - it may be better to handle this in a different place and make a setter and getter.
             config.updateUI();
-            // Changed to a ternary operator rather than a for loop each time.
-            toggleDarkModeButton.setText(isDarkMode ? "Light Mode" : "Dark Mode");
+            // Icon-only button: no text to flip.
         } catch (UnsupportedLookAndFeelException e) {
             throw new RuntimeException("Error occurred whilst swapping appearance", e);
         }
@@ -109,19 +109,14 @@ public class MenuBars {
         toggleDarkMode();
     }
     public void createVerticalMenuBar() {
-        verticalBar = new JPanel(new GridLayout(12, 1));
+        verticalBar = new JPanel();
+        verticalBar.setLayout(new BoxLayout(verticalBar, BoxLayout.Y_AXIS));
         // All Vertical Menu Items
 
-        brush = new JButton("Brush");
-        brush.setToolTipText("""
-                Brush
-                Draw freehand on the canvas.
-                See File->Help->Brush for more information.
-                """);
-        brush.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        brush = toolButton(Icons.brush(), "Brush - freehand drawing");
         brush.addActionListener(e -> {
             PixelGraphicEditor.getCanvas().setTool(new BrushTool());
-            showButtonOptions(brush);
+            showSubmenu(brush, brushMenu);
         });
         // Show the submenu when clicked
 
@@ -145,26 +140,14 @@ public class MenuBars {
             sizeMenu.add(createBrushSizeOption(sizeNames[i], sizes[i]));
         }
 
-        JButton pencil = new JButton("Pencil");
-        pencil.setToolTipText("""
-                Pencil
-                Draw freehand on the canvas.
-                See File->Help->Pencil for more information.
-                """);
-        pencil.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton pencil = toolButton(Icons.pencil(), "Pencil");
         pencil.addActionListener(e -> PixelGraphicEditor.getCanvas().setTool(new PencilTool()));
         verticalBar.add(pencil);
 
-        JButton eraser = new JButton("Eraser");
-        eraser.setToolTipText("""
-                Eraser
-                Erase parts of the canvas.
-                See File->Help->Eraser for more information.
-                """);
-        eraser.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton eraser = toolButton(Icons.eraser(), "Eraser");
         eraser.addActionListener(e -> {
             PixelGraphicEditor.getCanvas().setTool(new EraserTool());
-            showButtonOptions(eraser);
+            showSubmenu(eraser, eraserSizeMenu);
         });
 
         verticalBar.add(eraser);
@@ -176,45 +159,19 @@ public class MenuBars {
 
         for (int i = 0; i < eraserSizeNames.length; i++) {JMenuItem eraserSizeButton = createEraserSizeOption(eraserSizeNames[i], eraserSizes[i]);eraserSizeMenu.add(eraserSizeButton);}
 
-        JButton colour = new JButton("Colour");
-        colour.setToolTipText("""
-                Colour
-                Choose a colour to draw with.
-                See File->Help->Colour for more information.
-                """);
-        colour.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton fill = toolButton(Icons.fill(), "Fill - click the canvas to flood-fill with the current colour");
         ColorTool colorTool = new ColorTool();
-        colour.addActionListener(e -> {
-            PixelGraphicEditor.getCanvas().setTool(colorTool);
-            colorTool.actionPerformed(e); // Open color picker
-        });
-        verticalBar.add(colour);
+        fill.addActionListener(e -> PixelGraphicEditor.getCanvas().setTool(colorTool));
+        verticalBar.add(fill);
 
-        JButton eyedropper = new JButton("Eyedropper");
-        eyedropper.setToolTipText("""
-                Eyedropper
-                Click the canvas to pick up that colour as the current colour.
-                See File->Help->Eyedropper for more information.
-                """);
-        eyedropper.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton eyedropper = toolButton(Icons.eyedropper(), "Eyedropper - pick colour from canvas (I)");
         eyedropper.addActionListener(e -> PixelGraphicEditor.getCanvas().setTool(new EyedropperTool()));
         verticalBar.add(eyedropper);
 
-        JButton shape = new JButton("Shape");
-        shape.setToolTipText("""
-                Shape
-                Draw shapes on the canvas.
-                See File->Help->Shape for more information.
-                """);
-        shape.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton shape = toolButton(Icons.shape(), "Shape");
         shape.addActionListener(new shapeTool());
         verticalBar.add(shape);
-        JButton select = new JButton("Select");
-        select.setToolTipText("""
-                Select
-                Select a region of the canvas to move, resize, or delete.
-                See File->Help->Select for more information.""");
-        select.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton select = toolButton(Icons.select(), "Select - move / resize / copy a region");
         select.addActionListener(e -> {
             // Create and configure the select tool
             SelectTool selectTool = SelectTool.getInstance();
@@ -229,12 +186,7 @@ public class MenuBars {
         });
         verticalBar.add(select);
 
-        JButton zoom = new JButton("Zoom");
-        zoom.setToolTipText("""
-                Zoom
-                Click to zoom in and out of the canvas.
-                See File->Help->Magnifify for more information.""");
-        zoom.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton zoom = toolButton(Icons.zoom(), "Zoom (M)");
 
         Action zoomAction = new AbstractAction() {
             @Override
@@ -255,12 +207,7 @@ public class MenuBars {
         //Roatate type buttons
         rotateTypeMenu = new JPopupMenu();
 
-        JButton rotate = new JButton("Rotate");
-        rotate.setToolTipText("""
-                Rotate
-                Rotate the canvas.
-                See File->Help-Rotate for more information.""");
-        rotate.setFont(new Font("Comic Sans", Font.BOLD, 16));
+        JButton rotate = toolButton(Icons.rotate(), "Rotate / flip");
         rotate.addActionListener(e -> {
             RotateTool rotateTool = new RotateTool();
             PixelGraphicEditor.getCanvas().setTool(rotateTool);
@@ -269,17 +216,7 @@ public class MenuBars {
 
         verticalBar.add(rotate);
 
-        JButton text = new JButton("Text");
-        text.setToolTipText("""
-                Text
-                Add text to the canvas.
-                See File->Help->Text for more information.
-                """);
-        text.setFont(new Font("Comic Sans", Font.BOLD, 16));
-
-        // Initialize font selection dropdown
-        createFontSelectionMenu();
-
+        JButton text = toolButton(Icons.text(), "Text");
         text.addActionListener(e -> {
             TextTool textTool = TextTool.getInstance();
             textTool.setCanvas(PixelGraphicEditor.getCanvas());
@@ -289,26 +226,25 @@ public class MenuBars {
 
         verticalBar.add(text);
 
-        JButton toggleMode = new JButton("Icon Only Mode");
-        toggleMode.setToolTipText("""
-                Icon Only Mode
-                Toggle between text and icon-only mode.
-                See File->Help->Icon Only Mode for more information.
-                """);
-        toggleMode.setFont(new Font("Comic Sans", Font.BOLD, 16));
-        List<JButton> buttonList = List.of(brush, pencil, eraser, colour, eyedropper, shape, select, zoom, rotate, text);
-        toggleMode.addActionListener(new iconOnlyMode(buttonList));
-        verticalBar.add(toggleMode);
+        verticalBar.add(Box.createVerticalGlue()); // keep buttons compact at the top
+    }
 
-        toggleDarkModeButton = new JButton("Dark Mode");
-        toggleDarkModeButton.setToolTipText("""
-                Toggle Dark/Light Mode
-                Toggle between a light and dark appearance.
-                See File->Help->Toggle Dark Mode for more information.
-                """);
-        toggleDarkModeButton.setFont(new Font("Comic Sans", Font.BOLD, 16));
-        toggleDarkModeButton.addActionListener(new toggleDarkModeListener());
-        verticalBar.add(toggleDarkModeButton);
+    // A compact, icon-only tool button with a hover tooltip.
+    private JButton toolButton(Icon icon, String tooltip) {
+        JButton b = new JButton(icon);
+        b.setToolTipText(tooltip);
+        b.setAlignmentX(Component.CENTER_ALIGNMENT);
+        b.setMargin(new Insets(2, 2, 2, 2));
+        Dimension d = new Dimension(40, 40); // compact, square icon buttons
+        b.setMinimumSize(d);
+        b.setPreferredSize(d);
+        b.setMaximumSize(d);
+        return b;
+    }
+
+    // Show a tool's submenu just to the right of its button.
+    private static void showSubmenu(JButton button, JPopupMenu menu) {
+        if (menu != null) menu.show(button, button.getWidth(), 0);
     }
 
     public void createHorizontalMenuBar() {

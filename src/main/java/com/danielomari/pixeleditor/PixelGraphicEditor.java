@@ -6,6 +6,7 @@ import com.danielomari.pixeleditor.ui.MenuBar.MenuBars;
 import com.danielomari.pixeleditor.util.Configuration;
 import com.danielomari.pixeleditor.ui.CanvasPanel;
 import com.danielomari.pixeleditor.ui.LayersPanel;
+import com.danielomari.pixeleditor.ui.ColourPanel;
 import com.formdev.flatlaf.FlatLaf;
 import javax.swing.*;
 import java.awt.*;
@@ -15,10 +16,12 @@ import java.awt.event.ComponentAdapter;
 public class PixelGraphicEditor {
     private final JFrame mainFrame;
     private static CanvasPanel canvas;
-    private static JSplitPane leftSplit;   // tools | (canvas + layers)
-    private static JSplitPane rightSplit;  // canvas | layers
-    private static final String LEFT_DIVIDER = "layout.left.divider";
+    private static JSplitPane leftSplit;   // tools | (canvas + right dock)
+    private static JSplitPane rightSplit;  // canvas | right dock
+    private static JSplitPane rightDock;   // colour (top) / layers (bottom)
+    private static final String LEFT_DIVIDER = "layout.left.divider.v2"; // bumped: icon toolbar default
     private static final String RIGHT_DIVIDER = "layout.right.divider";
+    private static final String DOCK_DIVIDER = "layout.dock.divider";
     private static final int DEFAULT_LAYERS_W = 220;
 
     public PixelGraphicEditor() {
@@ -49,9 +52,15 @@ public class PixelGraphicEditor {
         menuBars.createHorizontalMenuBar();
         createCanvas();
 
-        // Resizable layout: tools | (canvas | layers), with draggable dividers.
+        // Resizable layout: tools | ( canvas | [ colour / layers ] ), draggable dividers.
         LayersPanel layersPanel = new LayersPanel(canvas);
-        rightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, canvas, layersPanel);
+        ColourPanel colourPanel = new ColourPanel();
+        rightDock = new JSplitPane(JSplitPane.VERTICAL_SPLIT, colourPanel, layersPanel);
+        rightDock.setResizeWeight(0.0);    // colour stays on top, layers grows below
+        rightDock.setContinuousLayout(true);
+        rightDock.setOneTouchExpandable(true);
+
+        rightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, canvas, rightDock);
         rightSplit.setResizeWeight(1.0);   // canvas absorbs window resizing
         rightSplit.setContinuousLayout(true);
         rightSplit.setOneTouchExpandable(true);
@@ -95,6 +104,8 @@ public class PixelGraphicEditor {
                     config.getInt(LEFT_DIVIDER, MenuBars.verticalBar.getPreferredSize().width));
             rightSplit.setDividerLocation(
                     config.getInt(RIGHT_DIVIDER, Math.max(0, rightSplit.getWidth() - DEFAULT_LAYERS_W)));
+            rightDock.setDividerLocation(
+                    config.getInt(DOCK_DIVIDER, rightDock.getTopComponent().getPreferredSize().height));
             wireLayoutSaving(config);
         });
     }
@@ -105,11 +116,13 @@ public class PixelGraphicEditor {
         Timer saveTimer = new Timer(400, e -> {
             config.putInt(LEFT_DIVIDER, leftSplit.getDividerLocation());
             config.putInt(RIGHT_DIVIDER, rightSplit.getDividerLocation());
+            config.putInt(DOCK_DIVIDER, rightDock.getDividerLocation());
             config.save();
         });
         saveTimer.setRepeats(false);
         leftSplit.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> saveTimer.restart());
         rightSplit.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> saveTimer.restart());
+        rightDock.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> saveTimer.restart());
     }
 
     // Reset the panels to their default sizes (Home -> Reset Layout).
@@ -122,6 +135,11 @@ public class PixelGraphicEditor {
         Configuration config = Configuration.getInstance();
         config.putInt(LEFT_DIVIDER, defLeft);
         config.putInt(RIGHT_DIVIDER, defRight);
+        if (rightDock != null) {
+            int defDock = rightDock.getTopComponent().getPreferredSize().height;
+            rightDock.setDividerLocation(defDock);
+            config.putInt(DOCK_DIVIDER, defDock);
+        }
         config.save();
     }
 
