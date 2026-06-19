@@ -32,6 +32,27 @@ class LayerStack(var width: Int, var height: Int) {
     fun get(i: Int): Layer = items[i]
     fun indexOf(layer: Layer): Int = items.indexOf(layer)
 
+    /** Set the document dimensions without touching pixels (used by undo). */
+    fun setSize(w: Int, h: Int) {
+        width = w
+        height = h
+    }
+
+    /** Resize the canvas: rebuild every layer at the new size, anchoring content
+     *  top-left (transparent where extended, cropped where shrunk). */
+    fun resize(newW: Int, newH: Int) {
+        if (newW <= 0 || newH <= 0) return
+        width = newW
+        height = newH
+        for (layer in items) {
+            val resized = BufferedImage(newW, newH, BufferedImage.TYPE_INT_ARGB)
+            val g = resized.createGraphics()
+            g.drawImage(layer.image, 0, 0, null)
+            g.dispose()
+            layer.image = resized
+        }
+    }
+
     // ---- active-layer selection ----
     fun setActive(i: Int) { if (i in items.indices) activeIndex = i }
 

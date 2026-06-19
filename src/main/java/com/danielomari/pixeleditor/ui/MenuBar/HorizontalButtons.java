@@ -26,7 +26,7 @@ public class HorizontalButtons {
     // Home Button Logic
     private void HomeButtonLogic(JButton button) {
         JPopupMenu popupMenu = new JPopupMenu();
-        String[] options = {"Canvas Selection", "Auto Save: ", "Exit", "Help"};
+        String[] options = {"Canvas Selection", "Auto Save: ", "Reset Layout", "Exit", "Help"};
         for (String option : options) {
             JMenuItem item = new JMenuItem(option);
             popupMenu.add(item);
@@ -37,6 +37,9 @@ public class HorizontalButtons {
                 case "Auto Save: ":
                     item.addActionListener(e -> HomeButtonAutoSave());
                     item.setText("Auto Save: " + selectedAutoSaveType);
+                    break;
+                case "Reset Layout":
+                    item.addActionListener(e -> PixelGraphicEditor.resetLayout());
                     break;
                 case "Exit":
                     item.addActionListener(e -> System.exit(0));
@@ -54,7 +57,40 @@ public class HorizontalButtons {
     }
 
     private void HomeButtonCanvasSelection() {
-        System.out.println("HomeButtonCanvasSelection");
+        CanvasPanel canvas = CanvasPanel.getInstance();
+        int curW = canvas.getCanvasImage().getWidth();
+        int curH = canvas.getCanvasImage().getHeight();
+
+        JComboBox<String> presets = new JComboBox<>(new String[]{
+                "Custom", "800 x 600", "1024 x 768", "1280 x 720", "1920 x 1080", "500 x 500"
+        });
+        JSpinner widthSpin = new JSpinner(new SpinnerNumberModel(curW, 1, 5000, 1));
+        JSpinner heightSpin = new JSpinner(new SpinnerNumberModel(curH, 1, 5000, 1));
+        presets.addActionListener(e -> {
+            String s = (String) presets.getSelectedItem();
+            if (s != null && s.contains("x")) {
+                String[] parts = s.split("x");
+                try {
+                    widthSpin.setValue(Integer.parseInt(parts[0].trim()));
+                    heightSpin.setValue(Integer.parseInt(parts[1].trim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        });
+
+        JPanel panel = new JPanel(new GridLayout(0, 2, 6, 6));
+        panel.add(new JLabel("Preset:"));
+        panel.add(presets);
+        panel.add(new JLabel("Width (px):"));
+        panel.add(widthSpin);
+        panel.add(new JLabel("Height (px):"));
+        panel.add(heightSpin);
+
+        int result = JOptionPane.showConfirmDialog(null, panel, "Canvas Size",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (result == JOptionPane.OK_OPTION) {
+            canvas.resizeCanvas((Integer) widthSpin.getValue(), (Integer) heightSpin.getValue());
+        }
     }
 
     private void HomeButtonAutoSave() {

@@ -15,6 +15,11 @@ import java.awt.event.ComponentAdapter;
 public class PixelGraphicEditor {
     private final JFrame mainFrame;
     private static CanvasPanel canvas;
+    private static JSplitPane leftSplit;   // tools | (canvas + layers)
+    private static JSplitPane rightSplit;  // canvas | layers
+    private static final String LEFT_DIVIDER = "layout.left.divider";
+    private static final String RIGHT_DIVIDER = "layout.right.divider";
+    private static final int DEFAULT_LAYERS_W = 220;
 
     public PixelGraphicEditor() {
         mainFrame = new JFrame("Pixel Graphic Editor");
@@ -44,10 +49,20 @@ public class PixelGraphicEditor {
         menuBars.createHorizontalMenuBar();
         createCanvas();
 
-        // Add components to frame
-        mainFrame.add(MenuBars.verticalBar, BorderLayout.WEST);
+        // Resizable layout: tools | (canvas | layers), with draggable dividers.
+        LayersPanel layersPanel = new LayersPanel(canvas);
+        rightSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, canvas, layersPanel);
+        rightSplit.setResizeWeight(1.0);   // canvas absorbs window resizing
+        rightSplit.setContinuousLayout(true);
+        rightSplit.setOneTouchExpandable(true);
+
+        leftSplit = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, MenuBars.verticalBar, rightSplit);
+        leftSplit.setResizeWeight(0.0);    // the tool column keeps its width
+        leftSplit.setContinuousLayout(true);
+        leftSplit.setOneTouchExpandable(true);
+
         mainFrame.add(MenuBars.horizontalBar, BorderLayout.NORTH);
-        mainFrame.add(new LayersPanel(canvas), BorderLayout.EAST);
+        mainFrame.add(leftSplit, BorderLayout.CENTER);
 
         mainFrame.addComponentListener(new ComponentAdapter() {
             @Override
@@ -74,12 +89,44 @@ public class PixelGraphicEditor {
                     // Non-fatal: if the flag can't be saved, help simply shows again next launch.
                 }
             }
+
+            // Restore saved panel sizes (or sensible defaults), then persist future changes.
+            leftSplit.setDividerLocation(
+                    config.getInt(LEFT_DIVIDER, MenuBars.verticalBar.getPreferredSize().width));
+            rightSplit.setDividerLocation(
+                    config.getInt(RIGHT_DIVIDER, Math.max(0, rightSplit.getWidth() - DEFAULT_LAYERS_W)));
+            wireLayoutSaving(config);
         });
     }
 
+    // Persist divider positions a moment after they change (debounced, so dragging
+    // doesn't hammer the config file).
+    private void wireLayoutSaving(Configuration config) {
+        Timer saveTimer = new Timer(400, e -> {
+            config.putInt(LEFT_DIVIDER, leftSplit.getDividerLocation());
+            config.putInt(RIGHT_DIVIDER, rightSplit.getDividerLocation());
+            config.save();
+        });
+        saveTimer.setRepeats(false);
+        leftSplit.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> saveTimer.restart());
+        rightSplit.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> saveTimer.restart());
+    }
+
+    // Reset the panels to their default sizes (Home -> Reset Layout).
+    public static void resetLayout() {
+        if (leftSplit == null || rightSplit == null) return;
+        int defLeft = MenuBars.verticalBar.getPreferredSize().width;
+        int defRight = Math.max(0, rightSplit.getWidth() - DEFAULT_LAYERS_W);
+        leftSplit.setDividerLocation(defLeft);
+        rightSplit.setDividerLocation(defRight);
+        Configuration config = Configuration.getInstance();
+        config.putInt(LEFT_DIVIDER, defLeft);
+        config.putInt(RIGHT_DIVIDER, defRight);
+        config.save();
+    }
+
     private void createCanvas() {
-        canvas = new CanvasPanel(); // Use our custom CanvasPanel
-        mainFrame.getContentPane().add(canvas, BorderLayout.CENTER); // Add to main frame
+        canvas = new CanvasPanel(); // the split-pane layout adds it to the frame
     }
 
     public static CanvasPanel getCanvas() {

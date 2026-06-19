@@ -15,6 +15,8 @@ import java.awt.image.BufferedImage;
 import java.util.function.Consumer;
 import com.danielomari.pixeleditor.layers.Layer;
 import com.danielomari.pixeleditor.layers.LayerStack;
+import com.danielomari.pixeleditor.commands.CommandManager;
+import com.danielomari.pixeleditor.commands.ResizeCanvasCommand;
 
 
 public class CanvasPanel extends JPanel {
@@ -122,6 +124,28 @@ public class CanvasPanel extends JPanel {
     // Flattened view of all visible layers, for saving/export.
     public BufferedImage getFlattenedImage() {
         return layers.flatten();
+    }
+
+    // Resize the document (all layers) to w x h, anchoring content top-left. Undoable.
+    public void resizeCanvas(int w, int h) {
+        if (w <= 0 || h <= 0) return;
+        int oldW = layers.getWidth();
+        int oldH = layers.getHeight();
+        BufferedImage[] before = snapshotLayerImages();
+        layers.resize(w, h);
+        BufferedImage[] after = snapshotLayerImages();
+        CommandManager.getInstance().executeCommand(
+                new ResizeCanvasCommand(this, oldW, oldH, w, h, before, after));
+        if (onLayersChanged != null) onLayersChanged.run();
+        revalidate();
+        repaint();
+    }
+
+    private BufferedImage[] snapshotLayerImages() {
+        List<Layer> ls = layers.layers();
+        BufferedImage[] arr = new BufferedImage[ls.size()];
+        for (int i = 0; i < ls.size(); i++) arr[i] = ls.get(i).getImage();
+        return arr;
     }
 
     // Let the Layers panel re-sync when the stack changes from outside it.

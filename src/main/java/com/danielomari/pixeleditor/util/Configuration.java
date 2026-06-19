@@ -58,6 +58,28 @@ public final class Configuration {
         updateConfiguration();
     }
 
+    // Integer settings (e.g. saved panel divider positions).
+    public int getInt(String key, int defaultValue) {
+        try {
+            return Integer.parseInt(properties.getProperty(key, String.valueOf(defaultValue)));
+        } catch (NumberFormatException e) {
+            return defaultValue;
+        }
+    }
+
+    public void putInt(String key, int value) {
+        properties.setProperty(key, String.valueOf(value));
+    }
+
+    // Persist the current properties to disk (non-fatal if it can't be written).
+    public void save() {
+        try {
+            updateConfiguration();
+        } catch (RuntimeException e) {
+            // ignore: settings just won't persist this time
+        }
+    }
+
 
     public static Configuration getInstance() {
         if (instance == null) {
