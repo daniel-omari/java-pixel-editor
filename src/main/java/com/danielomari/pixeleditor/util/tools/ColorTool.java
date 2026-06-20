@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Queue;
 import java.awt.event.*;
 
+// Holds the current drawing colour and recent colours, and flood-fills on click.
 public class ColorTool implements Tool, ActionListener {
     //Default color is set to black
     private static Color currentColor = Color.BLACK;
@@ -40,7 +41,6 @@ public class ColorTool implements Tool, ActionListener {
         }
         addRecentColour(color);
         fireColorChanged();
-        System.out.println("Color changed to: " + color);
     }
     // Set the current colour WITHOUT recolouring an active selection (eyedropper).
     public static void pickColor(Color color) {

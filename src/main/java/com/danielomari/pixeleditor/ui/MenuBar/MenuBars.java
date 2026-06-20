@@ -1,7 +1,5 @@
 package com.danielomari.pixeleditor.ui.MenuBar;
 
-import com.formdev.flatlaf.themes.FlatMacDarkLaf;
-import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import com.danielomari.pixeleditor.commands.CommandManager;
 import com.danielomari.pixeleditor.ui.CanvasPanel;
 import com.danielomari.pixeleditor.ui.Icons;
@@ -30,53 +28,23 @@ import java.awt.GraphicsEnvironment;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 
+// Builds the toolbars - the vertical tool palette and horizontal menu - plus each tool's settings panel.
 public class MenuBars {
     public static JPanel verticalBar;
     public static JPanel horizontalBar;
-    public static JButton toggleDarkModeButton;
 
     private static MenuBars instance;
     private static boolean iconMode = false; // Toggle between text+icon and icon-only mode
 
     public static JButton brush;
-    public static JPopupMenu brushMenu, sizeMenu, brushSizeMenu;
-    public static Point buttonLocation; //find button position
 
-    public static JButton eraserSmall, eraserMedium, eraserLarge, eraserExtreme;
-    public static JPopupMenu eraserSizeMenu;
     public static JPopupMenu rotateTypeMenu;
 
-    //public static JComboBox<String> textFontMenu; //create drop-down list
-    private static JPopupMenu fontPopup;
     private JDialog textSettingsDialog; // floating Text settings panel
     private JDialog toolDialog;          // floating Brush/Pencil settings panel
 
     private MenuBars() {}
 
-//    private static void toggleMenuMode() {
-//        iconMode = !iconMode;
-//        for (Component comp : verticalBar.getComponents()) {
-//            if (comp instanceof JButton button) {
-//                // Save original text if not saved yet
-//                if (button.getClientProperty("originalText") == null) {
-//                    button.putClientProperty("originalText", button.getText());
-//                }
-//
-//                // Toggle text visibility
-//                String originalText = (String) button.getClientProperty("originalText");
-//                if (iconMode) {
-//                    //Set icon here and remove text
-//                    button.setIcon(loadIcon("test.png",32,32)); // Assign icon based on text
-//                    //test.png (credit: Freepik) is for internal use only, will be replaced with other icons
-//                    button.setText(""); // Hide text
-//
-//                } else {
-//                    button.setText(originalText); // Restore text
-//                    button.setIcon(null); // Remove icon when text mode is enabled
-//                }
-//            }
-//        }
-//    }
 
     private static ImageIcon loadIcon(String fileName, int width, int height) {
         try {
@@ -89,26 +57,6 @@ public class MenuBars {
         }
     }
 
-    private static void toggleDarkMode() {
-        try {
-            // Loads the config file as an instance.
-            Configuration config = Configuration.getInstance(); // Makes more sense to initiate here.
-            boolean isDarkMode = config.is("ui.dark.mode.disabled", true); // Starts as true.
-            UIManager.setLookAndFeel(isDarkMode ? new FlatMacLightLaf() : new FlatMacDarkLaf());
-            config.properties.setProperty("ui.dark.mode.disabled", String.valueOf(!isDarkMode));
-            // Update configuration file.
-            config.getUpdatedConfiguration();
-            // Update UI - it may be better to handle this in a different place and make a setter and getter.
-            config.updateUI();
-            // Icon-only button: no text to flip.
-        } catch (UnsupportedLookAndFeelException e) {
-            throw new RuntimeException("Error occurred whilst swapping appearance", e);
-        }
-    }
-
-    public static void getToggleDarkMode() {
-        toggleDarkMode();
-    }
     public void createVerticalMenuBar() {
         verticalBar = new JPanel();
         verticalBar.setLayout(new BoxLayout(verticalBar, BoxLayout.Y_AXIS));
@@ -164,7 +112,6 @@ public class MenuBars {
 
             // The canvas is now properly set, so we can activate
             selectTool.activate();
-            System.out.println("Select tool selected");
         });
         verticalBar.add(select);
 
@@ -308,14 +255,12 @@ public class MenuBars {
         @Override
         public void actionPerformed(ActionEvent e) {
             Save.saveImage();
-            System.out.println("Save menu item clicked");
         }
     }
 
     private static class undoButton implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent e) {
-            System.out.println("Undo menu item clicked");
             CommandManager.getInstance().undo();
             CommandManager.getInstance().showStack();
         }
@@ -324,7 +269,6 @@ public class MenuBars {
     private static class redoButton implements ActionListener {
         @Override
         public void actionPerformed(ActionEvent e) {
-            System.out.println("Redo menu item clicked");
             CommandManager.getInstance().redo();
             CommandManager.getInstance().showStack();
         }
@@ -338,42 +282,9 @@ public class MenuBars {
             PixelGraphicEditor.getCanvas().setTool(shapeTool);
             shapeTool.activate();
             shapeTool.showShapeMenu((Component) e.getSource());
-            System.out.println("Shape tool selected");
         }
     }
 
-//    private static void deactivateShapeTool() {
-//        ShapeTool shapeTool = ShapeTool.getInstance();
-//        shapeTool.deactivate();
-//    }
-
-    private static class toggleDarkModeListener implements ActionListener {
-        @Override
-        public void actionPerformed(ActionEvent e) {
-            getToggleDarkMode();
-        }
-    }
-
-    private static void showButtonOptions(JButton button){
-        JPopupMenu menuToShow = null;
-
-        if (button.getText().equals("Brush")) {
-            menuToShow = brushMenu;
-        } else if (button.getText().equals("Eraser")) {
-            menuToShow = eraserSizeMenu;
-        } else if (button.getText().equals("Text")){
-            menuToShow = fontPopup;
-        }
-
-        // Show the menu to the **right** of the brush button
-        if (menuToShow != null) {
-            // Get button position relative to its parent (verticalBar)
-            buttonLocation = button.getLocationOnScreen();
-
-            // Show the menu to the **right** of the selected tool's button
-            menuToShow.show(button, button.getWidth(), 0);
-        }
-    }
 
     private static void showRotateOptions(JButton parentButton, RotateTool rotateTool) {
         JPopupMenu rotateMenu = new JPopupMenu();
@@ -398,64 +309,7 @@ public class MenuBars {
         rotateMenu.show(parentButton, parentButton.getWidth(), 0);
     }
 
-    private void createFontSelectionMenu() {
-        System.out.println("Enter createFontSelectionMenu");
-
-        //test for available font
-        GraphicsEnvironment ge = GraphicsEnvironment.getLocalGraphicsEnvironment();
-        String[] fontNames = ge.getAvailableFontFamilyNames();
-        //System.out.println("Available fonts: " + Arrays.toString(fontNames));
-        
-        // Filter out symbol fonts dynamically
-        List<String> filteredFonts = Arrays.stream(fontNames)
-            .filter(font -> !isSymbolFont(font)) // Keep fonts that are NOT symbols
-            .sorted() // Optional: Sort alphabetically
-            .collect(Collectors.toList());
-
-        // Create a scrollable list of fonts
-        JList<String> fontList = new JList<>(filteredFonts.toArray(new String[0]));
-        fontList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION); // Allow single selection
-
-        // Add scroll pane to the popup
-        JScrollPane scrollPane = new JScrollPane(fontList);
-        scrollPane.setPreferredSize(new Dimension(250, 200)); // Set max height to 200px
-
-        // Create the popup menu and add dropdown to it
-        fontPopup = new JPopupMenu();
-        fontPopup.add(scrollPane);
-
-        // Listen for font selection
-        fontList.addListSelectionListener(e -> {
-            if (!e.getValueIsAdjusting()) { // Ensure event fires only once per selection
-                String selectedFont = fontList.getSelectedValue();
-                TextTool textTool = TextTool.getInstance();
-                textTool.setSelectedFont(selectedFont);
-                System.out.println("Selected font: " + selectedFont);
-                fontPopup.setVisible(false); // Close the popup after selection
-
-                // Show font size dialog after font selection
-                textTool.promptForFontSize();
-            }
-        });
-
-    }
-
     // Helper method to set the default font
-    private void setDefaultFont(String[] fontNames, JList<String> fontList) {
-        int arialIndex = -1;
-        for (int i = 0; i < fontNames.length; i++) {
-            if (fontNames[i].equalsIgnoreCase("Arial")) {
-                arialIndex = i;
-                break;
-            }
-        }
-
-        if (arialIndex != -1) {
-            fontList.setSelectedIndex(arialIndex); // Highlight Arial in the list
-            TextTool.getInstance().setSelectedFont("Arial"); // Set default in TextTool
-        }
-    }
-
     private boolean isSymbolFont(String fontName) {
         try {
             // Create a temporary font instance

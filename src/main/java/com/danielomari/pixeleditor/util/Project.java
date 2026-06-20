@@ -76,7 +76,6 @@ public final class Project {
             zos.closeEntry();
 
             lastProjectFile = file;
-            System.out.println("Project saved to: " + file.getAbsolutePath());
         } catch (IOException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(null, "Failed to save project:\n" + ex.getMessage(),
@@ -143,7 +142,6 @@ public final class Project {
             canvas.revalidate();
             canvas.repaint();
             lastProjectFile = file;
-            System.out.println("Project opened: " + file.getAbsolutePath());
         } catch (IOException | NumberFormatException ex) {
             ex.printStackTrace();
             JOptionPane.showMessageDialog(null, "Failed to open project:\n" + ex.getMessage(),

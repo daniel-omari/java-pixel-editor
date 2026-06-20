@@ -6,6 +6,7 @@ import com.danielomari.pixeleditor.util.tools.SelectTool;
 import java.util.Stack;
 import java.util.ArrayList;
 
+// Singleton undo/redo stacks: records executed commands and replays them on undo/redo.
 public class CommandManager {
     private static CommandManager instance;
     private final Stack<Command> undoStack = new Stack<>();
@@ -32,7 +33,6 @@ public class CommandManager {
     }
 
     public void showStack() {
-//        System.out.println("Undo Stack" + undoStack + "Redo Stack" + redoStack); // For debugging
         }
 
     public void undo() {

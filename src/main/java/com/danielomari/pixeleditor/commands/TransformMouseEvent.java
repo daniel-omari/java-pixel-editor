@@ -6,6 +6,7 @@ import java.awt.*;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 
+// Translates raw panel mouse coordinates into image-space coordinates for the tools.
 public class TransformMouseEvent {
     public static MouseEvent transform(MouseEvent e, CanvasPanel canvasPanel) {
         // Delegate to the canvas's single source of truth for the screen -> image

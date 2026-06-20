@@ -8,6 +8,7 @@ import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 
+// The Help dialog: a tool/menu picker on the left and HTML instructions on the right.
 public class Help {
     private final JDialog helpDialog;
     private final JTextPane instructionPane;

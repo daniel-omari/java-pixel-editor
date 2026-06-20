@@ -13,6 +13,7 @@ import java.awt.image.BufferedImage;
 import java.awt.geom.AffineTransform;
 import java.awt.image.AffineTransformOp;
 
+// Rotates or flips the whole canvas (or the current selection).
 public class RotateTool implements Tool {
     private static BufferedImage appliedImage, rotatedImage;
     private static CanvasPanel canvasPanel;
@@ -34,7 +35,6 @@ public class RotateTool implements Tool {
 
     public static void setRotateType(RotateType rotateType) {
         selectedRotateType = rotateType;
-        System.out.println("Selected type: " + selectedRotateType);
     }
 
     @Override
@@ -43,7 +43,6 @@ public class RotateTool implements Tool {
         selectedTool.clearSelection();
         clipped=null;
         selectedContent = null;
-        System.out.println("Selected content = null");
     }
 
     @Override
@@ -64,21 +63,16 @@ public class RotateTool implements Tool {
 
         //update canvas before rotation
         canvasPanel.repaint();
-        //System.out.println("Canvas repaint before rotate, width: "+canvasPanel.getWidth() + " height: "+canvasPanel.getHeight());
         canvasPanel.doLayout();
-        //System.out.println("Canvas dolayout(), width: "+canvasPanel.getWidth() + " height: "+canvasPanel.getHeight());
 
         boolean isWholeCanvas = (selectedContent == null);
         
         if (isWholeCanvas) {
             appliedImage = wholeCanvas;
-            System.out.println("Applied Image = whole canvas");
         } else {
             canvasPanel.repaint();
             appliedImage = selectedContent;
             clipped = selectedTool.getClippedLocation();
-            System.out.println("Applied Image from select tool");
-            System.out.println("Rotate tool: getClippedLocation: Clipped.x: " + clipped.x + " clipped.y: " + clipped.y);
         }
 
         if (appliedImage == null) return;
@@ -101,7 +95,6 @@ public class RotateTool implements Tool {
             //remove the selected content (make that area become white color)
             Graphics2D g2dCanvas = wholeCanvas.createGraphics();
         
-            //g2dCanvas.setComposite(AlphaComposite.Src);
             g2dCanvas.setColor(Color.WHITE);
 
             width = appliedImage.getWidth();
@@ -111,8 +104,6 @@ public class RotateTool implements Tool {
             int safeHeight = Math.min(height, wholeCanvas.getHeight() - clipped.y);
 
             g2dCanvas.fillRect(clipped.x, clipped.y, safeWidth, safeHeight);
-            //System.out.println("clipped x"+clipped.x + " clipped y: "+clipped.y+" safeWidth: "+safeWidth + " safeHeight: "+safeHeight);
-            //System.out.println("width: " + width + " height: "+height);
 
             g2dCanvas.dispose();
 
@@ -125,30 +116,22 @@ public class RotateTool implements Tool {
             //paste the rotated image
             g2dCanvas.drawImage(rotatedImage, clipped.x, clipped.y, rotatedImage.getWidth(),rotatedImage.getHeight(),null);
 
-            //System.out.println("Paste rotated image, clipped.x: "+clipped.x + " clipped.y: "+clipped.y);
             g2dCanvas.dispose();
             canvasPanel.setCanvasImage(wholeCanvas);
 
             //reset select bound so the image can be rotated again
-            //SelectTool.updateSelectionAfterRotation(clipped.x, clipped.y, rotatedImage.getWidth(),rotatedImage.getHeight(), rotatedImage);
-            //System.out.println("For rotated again: clipped x:" + clipped.x + " clipped.y: "+clipped.y);
 
             //make the select button active so that all functions about selection can be used
             // Set the tool as current in CanvasPanel
-            //PixelGraphicEditor.getCanvas().setTool(selectedTool);
-            //selectedTool.activate();
-            //System.out.println("Control shift to select tool");
 
             //deactivate SelectTool
             selectedTool.deactivate();
             selectedContent = null;
 
-            System.out.println("Finish rotation");
         }
         
         canvasPanel.repaint();
 
-        //System.out.println("After rotation: Canvas width:" + canvasPanel.getWidth() + " Canvas height: "+canvasPanel.getHeight());
 
         // Complete command
         if (currentCommand != null) {

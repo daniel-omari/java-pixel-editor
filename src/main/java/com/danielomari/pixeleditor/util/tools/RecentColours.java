@@ -7,6 +7,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.util.List;
 
+// Fixed-size most-recently-used list of colours for the Colour panel.
 public class RecentColours extends AbstractColorChooserPanel {
     private JPanel recentColours;
 

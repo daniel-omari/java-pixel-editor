@@ -4,6 +4,7 @@ import javax.swing.*;
 import java.util.Timer;
 import java.util.TimerTask;
 
+// Background timer that periodically saves the document while auto-save is enabled.
 public class AutomaticSave {
     private Timer timer;
 
@@ -19,13 +20,11 @@ public class AutomaticSave {
                 autoSave();
             }
         }, 0, 300000); // 60000 milliseconds = 1 minute
-        System.out.println("Automatic Save Started");
     }
 
     public void stopAutoSave() {
         if (timer != null) {
             timer.cancel();
-            System.out.println("Automatic Save Stopped");
         }
     }
 
@@ -35,10 +34,8 @@ public class AutomaticSave {
 //         Save save = new Save();
         if (Save.hasSaved()) {
             Save.saveImage();
-            System.out.println("Automatic Save Saved");
             return;
         } else {
-            System.out.println("No previously saved file to save (Skipping)");
         }
     }
 

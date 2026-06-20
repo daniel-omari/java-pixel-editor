@@ -6,6 +6,7 @@ import java.util.Properties;
 import static java.lang.System.getProperty;
 
 
+// Loads and saves persistent settings (editor.properties), e.g. panel sizes and first-run flags.
 public final class Configuration {
     private static Configuration instance;
     public Properties properties = new Properties();
@@ -21,7 +22,6 @@ public final class Configuration {
                 properties.load(stream);
                 stream.close();}
         } catch (Exception e) {
-            System.out.println("An error occurred during loading configuration.");
             // Log the error
         }
     }
@@ -29,7 +29,6 @@ public final class Configuration {
     private File getConfiguration() {
         // Get the configuration folder path
         String configDir = getProperty("user.dir") + "/src/main/java/com/danielomari/pixeleditor/config";
-//        System.out.println(configDir);
         return new File(configDir);
 
     }

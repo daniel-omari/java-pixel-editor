@@ -16,7 +16,7 @@ import java.io.IOException;
 import javax.imageio.ImageIO;
 import javax.swing.*;
 
-
+// Imports an external image onto the active layer (scaled to fit), then hands off to the Select tool to position it.
 public class InsertTool implements Tool {
     private static CanvasPanel canvasPanel;
     private BufferedImage insertedImage;
@@ -26,7 +26,6 @@ public class InsertTool implements Tool {
     private boolean dragging = false;
     private Drawcommand currentCommand;
     private SelectTool selectedTool;
-
 
     public InsertTool() {
         canvasPanel = CanvasPanel.getInstance();
@@ -62,11 +61,10 @@ public class InsertTool implements Tool {
             //Set the tool as current in CanvasPanel
             PixelGraphicEditor.getCanvas().setTool(selectedTool);
             selectedTool.activate();
-            System.out.println("Control shift to select tool");
 
             //setCanvas
             selectedTool.setCanvas(canvasPanel);
-            
+
         }
 
         // Complete command
@@ -128,62 +126,17 @@ public class InsertTool implements Tool {
 
     @Override
     public void onPress(MouseEvent e) {
-        // Check if the user clicks inside the image
-        /* 
-        if (insertedImage != null && e.getX() >= imageX && e.getX() <= imageX + insertedImage.getWidth()
-                && e.getY() >= imageY && e.getY() <= imageY + insertedImage.getHeight()) {
-            dragging = true;
+        // No-op: images are placed via insert(); the Select tool then moves them.
 
-            startX = e.getX();
-            startY = e.getY();
-
-            // Store a new command before dragging starts
-            currentCommand = new Drawcommand(canvasPanel);
-            currentCommand.storeAfterState();  // Store before moving
-        }
-        */
     }
 
     @Override
     public void onDrag(MouseEvent e) {
-    /*      
-        if (dragging && insertedImage != null) {
-            // Calculate new position
-            int dx = e.getX() - startX;
-            int dy = e.getY() - startY;
-            imageX += dx;
-            imageY += dy;
 
-            startX = e.getX();
-            startY = e.getY();
-
-            Graphics2D g2d = canvasPanel.getCanvasImage().createGraphics();
-
-            canvasPanel.clearCanvas(); // Clear previous image position
-            // Restore original canvas before drawing the image  (without clearing it)
-            if (originalCanvasImage != null) {
-                g2d.drawImage(originalCanvasImage, 0, 0, null);
-            }
-
-            g2d.drawImage(insertedImage, imageX, imageY, null);
-
-            g2d.dispose();
-            canvasPanel.repaint();
-        }
-    */    
     }
 
     @Override
     public void onRelease(MouseEvent e) {
-    /*      
-        dragging = false; // Stop dragging when mouse is released
 
-        //save command for undo/redo
-        if (currentCommand != null) {
-            currentCommand.storeAfterState();
-            CommandManager.getInstance().executeCommand(currentCommand);
-            currentCommand = null;
-        }
-     */
     }
 }

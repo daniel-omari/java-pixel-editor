@@ -22,6 +22,7 @@ import com.danielomari.pixeleditor.commands.CommandManager;
 import com.danielomari.pixeleditor.commands.ResizeCanvasCommand;
 
 
+// The drawing surface: owns the layer stack, paints the composited document, and routes mouse / wheel / pan input to the active tool.
 public class CanvasPanel extends JPanel {
     @Serial
     private static final long serialVersionUID = 1L;
@@ -266,70 +267,32 @@ public class CanvasPanel extends JPanel {
         int screenY = (int) (imageY * currentZoomFactor) + getRenderOffsetY();
         return new Point(screenX, screenY);
     }
-    // Set the current tool and deactivate ShapeTool if it is the current tool
+    // Switch the active tool: tear down the previous tool, wire up the new one,
+    // then refresh the cursor. SelectTool is the fallback when null is passed.
     public void setTool(Tool tool) {
-        System.out.println("Incoming tool: " + tool);
-        System.out.println("Current tool before change: " + currentTool);
-
         ShapeTool.deactivateShapeTool();
-        
-        // Update tool reference FIRST
         Tool previousTool = currentTool;
 
-        // Deactivate SelectTool if currently active except current tool = RoateTool and InsertTool
-        if (previousTool instanceof SelectTool && 
-        !(tool instanceof RotateTool) && 
-        !(tool instanceof InsertTool)) {
-            
-            System.out.println("Deactivating SelectTool (standard case)");
+        // Leaving Select ends its selection, unless we hand off to Rotate/Insert
+        // which act on the current selection.
+        if (previousTool instanceof SelectTool
+                && !(tool instanceof RotateTool)
+                && !(tool instanceof InsertTool)) {
             ((SelectTool) previousTool).deactivate();
-            //test: the above method include clearSelection method, comment below command
-            //SelectTool.getInstance().clearSelection();
         }
 
-        
         this.currentTool = tool;
 
-        // New condition: Deactivate SelectTool when switching between RotateTool instances
+        // Rotate -> Rotate also drops any lingering selection.
         if (previousTool instanceof RotateTool && tool instanceof RotateTool) {
-            System.out.println("Deactivating SelectTool (rotate-to-rotate case)");
-            selectTool.deactivate(); // Deactivate using the instance reference
-        }
-
-        // New condition 2: Deactivate when switching from InsertTool to RotateTool
-        /* 
-        if (previousTool instanceof SelectTool && tool instanceof RotateTool) {
-            //finalise position of image
-
-            System.out.println("Deactivating SelectTool (insert-to-rotate case)");
             selectTool.deactivate();
-        }*/
-            
-
-        // Deactivate MagnifierTool if currently active
-        //if (currentTool instanceof MagnifierTool) {
-        //    ((MagnifierTool) currentTool).deactivate();
-        //}
-
-        // Default to selectTool if tool is null
-        if (tool == null) {
-            tool = selectTool;
         }
 
-        //this.currentTool = tool;
+        if (tool == null) {
+            tool = selectTool; // never leave the canvas tool-less
+        }
 
-        // Activate/setup based on new tool type
-        /* 
-        if (currentTool instanceof ShapeTool) {
-            ((ShapeTool) tool).setCanvas(this);
-            ((ShapeTool) tool).activate();
-        } else if (currentTool instanceof PencilTool) {
-            ((PencilTool) tool).setCanvas(this);
-            //test
-            System.out.println("Pencil tool set");
-        } else if (currentTool instanceof MagnifierTool) {
-            ((MagnifierTool) tool).activate();
-        }*/
+        // Set up the incoming tool.
         if (tool instanceof ShapeTool) {
             ((ShapeTool) tool).setCanvas(this);
             ((ShapeTool) tool).activate();
@@ -338,8 +301,8 @@ public class CanvasPanel extends JPanel {
         } else if (tool instanceof EyedropperTool) {
             ((EyedropperTool) tool).activate(this);
         }
-        
-        // Clean up previous tool if needed
+
+        // Tear down the outgoing tool.
         if (previousTool instanceof MagnifierTool) {
             ((MagnifierTool) previousTool).deactivate();
         }
@@ -378,14 +341,12 @@ public class CanvasPanel extends JPanel {
     public void addPaintListener(Consumer<Graphics2D> listener) {
         if (!paintListeners.contains(listener)) { // prevents duplicate event listeners
             paintListeners.add(listener);
-//            System.out.println("CanvasPanel: Paint listener added, total: " + paintListeners.size());
         }
     }
 
     // Remove a paint listener
     public void removePaintListener(Consumer<Graphics2D> listener) {
         paintListeners.remove(listener);
-//        System.out.println("CanvasPanel: Paint listener removed, remaining: " + paintListeners.size());
     }
 
     private void setupDrawingListeners() {

@@ -13,6 +13,7 @@ import java.awt.*;
 import java.awt.event.*;
 import java.util.function.Consumer;
 
+// Draws outlined shapes (rectangle, circle, line, triangle, pentagon, hexagon) with a configurable stroke width.
 public class ShapeTool implements Tool {
     private static ShapeTool instance;
     private final Color DEFAULT_COLOR = Color.BLACK;
@@ -162,7 +163,6 @@ public class ShapeTool implements Tool {
         if (paintListener == null) {
             paintListener = g -> {
                 if (isDrawing && startPoint != null && endPoint != null) {
-                    System.out.println("ShapeTool: Drawing preview shape");
                     Graphics2D g2d = (Graphics2D) g.create();
                     drawPreviewShape(g2d);
                     g2d.dispose();
@@ -247,7 +247,6 @@ public class ShapeTool implements Tool {
         if (startPoint == null || endPoint == null) return;
 
         Graphics2D g = CanvasPanel.getInstance().getCanvasImage().createGraphics();
-        System.out.println("Canvas Image Dimensions: " + canvas.getWidth() + "x" + canvas.getHeight());
         g.setColor(setColor());
         g.setStroke(new BasicStroke(strokeWidth));
         int x = Math.min(startPoint.x, endPoint.x);
@@ -305,7 +304,6 @@ public class ShapeTool implements Tool {
         setupMouseListeners();
         canvas.setCursor(Cursor.getPredefinedCursor(Cursor.CROSSHAIR_CURSOR));
 
-        System.out.println("ShapeTool activated");
     }
 
     public void deactivate() {
@@ -317,7 +315,6 @@ public class ShapeTool implements Tool {
         if (canvas != null) {
             canvas.setCursor(Cursor.getDefaultCursor());
         }
-        System.out.println("ShapeTool deactivated");
     }
 
     public void setColor(Color color) {

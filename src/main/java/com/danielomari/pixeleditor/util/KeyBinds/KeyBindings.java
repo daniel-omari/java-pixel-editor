@@ -12,6 +12,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 
+// Registers all keyboard shortcuts (tool letters and Ctrl-based file/edit actions) on the canvas.
 public class KeyBindings { // Moved the creation and configuration of keybinds away from CanvasPanel to reduce clutter.
     private final CanvasPanel canvasPanel;
     private SelectTool selectTool = new SelectTool();
@@ -68,7 +69,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new BrushTool());
-                System.out.println("Switched to Brush Tool");  // Debugging message
             }
         });
     }
@@ -79,7 +79,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new PencilTool());
-                System.out.println("Switched to Pencil Tool");  // Debugging message
             }
         });
     }
@@ -90,7 +89,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new EraserTool());
-                System.out.println("Switched to Eraser Tool");  // Debugging message
             }
         });
     }
@@ -101,7 +99,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new ShapeTool());
-                System.out.println("Switched to Shape Tool");  // Debugging message
             }
         });
     }
@@ -112,7 +109,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new SelectTool());
-                System.out.println("Switched to Select Tool");  // Debugging message
             }
         });
     }
@@ -123,7 +119,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new MagnifierTool(canvasPanel));
-                System.out.println("Switched to Zoom Tool");  // Debugging message
             }
         });
     }
@@ -134,7 +129,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new TextTool());
-                System.out.println("Switched to Text Tool");  // Debugging message
             }
         });
     }
@@ -145,32 +139,9 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 if (typingInTextField()) return; // ignore tool shortcuts while typing
                 canvasPanel.setTool(new EyedropperTool());
-                System.out.println("Switched to Eyedropper Tool");  // Debugging message
             }
         });
     }
-//    private void darkModeKeyBind(InputMap inputMap, ActionMap actionMap) { // Implement at some point
-//        inputMap.put(KeyStroke.getKeyStroke("control D"), "darkMode");
-//        actionMap.put("darkMode", new AbstractAction() {
-//            @Override
-//            public void actionPerformed(ActionEvent e) {
-//                // Dark mode
-//
-//                System.out.println("Dark Mode");
-//            }
-//        });
-//    }
-//    private void iconOnlyModeKeyBind(InputMap inputMap, ActionMap actionMap) {
-//        inputMap.put(KeyStroke.getKeyStroke("control I"), "iconOnlyMode");
-//        actionMap.put("iconOnlyMode", new AbstractAction() {
-//            @Override
-//            public void actionPerformed(ActionEvent e) {
-//                // Icon only mode
-//
-//                System.out.println("Icon Only Mode");
-//            }
-//        });
-//    }
 
     // Additional Keybinds.
     private void selectAllKeyBind(InputMap inputMap, ActionMap actionMap) {
@@ -181,7 +152,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
                 canvasPanel.setTool(new SelectTool());
                 selectTool.selectAll(canvasPanel);
                 canvasPanel.repaint();
-                System.out.println("Selected all");  // Debugging message
             }
         });
     }
@@ -193,7 +163,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 selectTool.clearSelection();
                 canvasPanel.repaint();
-                System.out.println("Deselected all");  // Debugging message
             }
         });
     }
@@ -206,7 +175,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
                 Frame parentFrame = (Frame) SwingUtilities.getWindowAncestor(PixelGraphicEditor.getCanvas());
                 Help help = new Help(parentFrame);
                 help.showHelp();
-                System.out.println("Help Menu Created");
             }
         });
     }
@@ -218,7 +186,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 CommandManager.getInstance().undo();
                 canvasPanel.repaint();
-                System.out.println("Undo");
             }
         });
     }
@@ -230,7 +197,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 CommandManager.getInstance().redo();
                 canvasPanel.repaint();
-                System.out.println("Redo");
             }
         });
     }
@@ -241,7 +207,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             @Override
             public void actionPerformed(ActionEvent e) {
                 Save.saveImage();
-                System.out.println("Save");
             }
         });
     }
@@ -252,7 +217,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             @Override
             public void actionPerformed(ActionEvent e) {
                 Save.saveImageAs();
-                System.out.println("Save As");
             }
         });
     }
@@ -265,7 +229,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
                 CommandManager.getInstance().clear();
                 canvasPanel.clearCanvas();
                 Save.getResetSave();
-                System.out.println("New File");
             }
         });
     }
@@ -277,7 +240,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 InsertTool insertTool = new InsertTool();
                 insertTool.insert();
-                System.out.println("Open File");
             }
         });
     }
@@ -289,7 +251,6 @@ public class KeyBindings { // Moved the creation and configuration of keybinds a
             public void actionPerformed(ActionEvent e) {
                 SafeExit safeExit = new SafeExit();
                 safeExit.actionPerformed(e);
-//                System.out.println("Exit");
             }
         });
     }

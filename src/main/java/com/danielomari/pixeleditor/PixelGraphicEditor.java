@@ -13,6 +13,7 @@ import java.awt.*;
 import java.awt.event.ComponentAdapter;
 
 
+// Application entry point: builds the main window (toolbar, canvas, colour/layers docks, status bar) and persists the layout.
 public class PixelGraphicEditor {
     private final JFrame mainFrame;
     private JLabel zoomLabel; // live zoom % in the status bar

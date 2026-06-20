@@ -15,6 +15,7 @@ import javax.swing.*;
 import java.awt.*;
 
 
+// Top menu-bar actions: the Home and File popups (canvas size, auto-save, layout, open/save image & project).
 public class HorizontalButtons {
     private AutoSaveType selectedAutoSaveType = AutoSaveType.OFF;
     private AutomaticSave autoSave = null;
@@ -98,17 +99,14 @@ public class HorizontalButtons {
         // Auto save functionality
         if (selectedAutoSaveType == AutoSaveType.OFF) {
             selectedAutoSaveType = AutoSaveType.ON;
-            System.out.println("Automatic Saving is turned On.\n");
             autoSave = new AutomaticSave();
         } else {
             selectedAutoSaveType = AutoSaveType.OFF;
-            System.out.println("Automatic Saving is turned Off.\n");
             if (autoSave != null) {
                 autoSave.stopAutoSave();
                 return;
             }
         }
-        System.out.println("Selected type: " + selectedAutoSaveType);
     }
 
     public void getHomeButton(JButton button) {
@@ -152,7 +150,6 @@ public class HorizontalButtons {
     }
 
     private void FileButtonNew() {
-        System.out.println("File Button New");
         int confirm = JOptionPane.showConfirmDialog(null, "<html><b>Are you sure you want to create a new file? This will clear the current canvas, any unsaved work will be lost.</b><html>", "Confirm New File", JOptionPane.YES_NO_OPTION);
         if(confirm == JOptionPane.YES_OPTION) {
             CommandManager.getInstance().clear();
@@ -161,23 +158,19 @@ public class HorizontalButtons {
 
             save.getResetSave();
         } if(confirm == JOptionPane.NO_OPTION) {
-            System.out.println("New File Cancelled");
         }
     }
 
     private void FileButtonOpen() {
-        System.out.println("File Button Open");
         InsertTool insertTool = new InsertTool();
         insertTool.insert();
     }
 
     private void FileButtonSave() {
-        System.out.println("File Button Save");
         Save.saveImage();
     }
 
     private void FileButtonSaveAs() {
-        System.out.println("File Button Save As");
         Save.saveImageAs();
     }
 
@@ -186,7 +179,6 @@ public class HorizontalButtons {
     }
 
     private void Help(JPopupMenu parentMenu) {
-        System.out.println("File Button Help");
         parentMenu.setVisible(false); // Close the popup first
 
         // Get the parent frame correctly

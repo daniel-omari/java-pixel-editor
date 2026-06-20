@@ -11,6 +11,7 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 
 
+// Exports the flattened document to a standard image file (PNG keeps transparency; JPEG/BMP flatten onto white).
 public class Save {
     private static boolean hasSaved = false;
     private static boolean hasSavedRecently = false;
@@ -59,7 +60,6 @@ public class Save {
                     ImageIO.write(image, defaultFileFormat, file);
                     hasSaved = true;
                     lastSavedFile = file; // Update the last saved file after saving
-                    System.out.println("Image saved to: " + file.getAbsolutePath());
                     hasSavedRecently = true;
                 } catch (Exception e) {
                     e.printStackTrace();
@@ -83,7 +83,6 @@ public class Save {
 
             try {
                 ImageIO.write(image, defaultFileFormat, file);
-                System.out.println("Image saved to: " + file.getAbsolutePath());
                 hasSavedRecently = true;
             } catch (Exception e) {
                 e.printStackTrace();
